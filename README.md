@@ -303,12 +303,12 @@ observer.Close() // Stop all observer listeners
 
 ## Field Types
 
-Capitan supports four primitive field types:
+Capitan provides four built-in field types:
 
-- `StringKey` / `StringField` - string values
-- `IntKey` / `IntField` - int values
-- `Float64Key` / `Float64Field` - float64 values
-- `BoolKey` / `BoolField` - bool values
+- `StringKey` - string values
+- `IntKey` - int values
+- `Float64Key` - float64 values
+- `BoolKey` - bool values
 
 Access typed values using the From() method:
 ```go
@@ -321,10 +321,83 @@ if !ok {
 Or via type assertion on fields:
 ```go
 field := e.Get(key)
-if sf, ok := field.(capitan.StringField); ok {
-    value := sf.String()
+if gf, ok := field.(capitan.GenericField[string]); ok {
+    value := gf.Get()
 }
 ```
+
+### Extending with Custom Types
+
+You can extend capitan with your own field types for structs or custom types:
+
+```go
+// Define your custom type
+type OrderInfo struct {
+    ID     string
+    Total  float64
+    Items  int
+}
+
+// Create a custom variant (use a unique string to avoid collisions)
+const VariantOrderInfo capitan.Variant = "myapp.OrderInfo"
+
+// Create a Key implementation
+type OrderInfoKey struct {
+    name string
+}
+
+func NewOrderInfoKey(name string) OrderInfoKey {
+    return OrderInfoKey{name: name}
+}
+
+func (k OrderInfoKey) Name() string { return k.name }
+func (k OrderInfoKey) Variant() capitan.Variant { return VariantOrderInfo }
+
+// Create fields using GenericField
+func (k OrderInfoKey) Field(value OrderInfo) capitan.Field {
+    return capitan.GenericField[OrderInfo]{
+        key:     k,
+        value:   value,
+        variant: k.Variant(),
+    }
+}
+
+// Extract typed values from events
+func (k OrderInfoKey) From(e *capitan.Event) (OrderInfo, bool) {
+    f := e.Get(k)
+    if f == nil {
+        return OrderInfo{}, false
+    }
+    if gf, ok := f.(capitan.GenericField[OrderInfo]); ok {
+        return gf.Get(), true
+    }
+    return OrderInfo{}, false
+}
+
+// Use it like built-in types
+func main() {
+    sig := capitan.Signal("order.processed")
+    orderKey := NewOrderInfoKey("order")
+
+    capitan.Hook(sig, func(e *capitan.Event) {
+        order, ok := orderKey.From(e)
+        if ok {
+            fmt.Printf("Order %s: $%.2f (%d items)\n",
+                order.ID, order.Total, order.Items)
+        }
+    })
+
+    capitan.Emit(sig, orderKey.Field(OrderInfo{
+        ID:    "ORDER-123",
+        Total: 99.99,
+        Items: 3,
+    }))
+
+    capitan.Shutdown()
+}
+```
+
+**Variant naming**: Use namespaced strings to avoid collisions (e.g., `"github.com/yourorg/yourpkg.TypeName"`).
 
 ## Event Access
 

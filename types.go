@@ -34,13 +34,13 @@ type Key interface {
 }
 
 // Variant is a discriminator for the Field interface implementation type.
-type Variant int
+type Variant string
 
 const (
-	VariantString Variant = iota
-	VariantInt
-	VariantFloat64
-	VariantBool
+	VariantString  Variant = "string"
+	VariantInt     Variant = "int"
+	VariantFloat64 Variant = "float64"
+	VariantBool    Variant = "bool"
 )
 
 // Field represents a typed value with semantic meaning in an Event.
@@ -56,6 +56,25 @@ type Field interface {
 	// Value returns the underlying value as any.
 	Value() any
 }
+
+// GenericField is a generic implementation of Field for typed values.
+type GenericField[T any] struct {
+	key     Key
+	value   T
+	variant Variant
+}
+
+// Variant returns the discriminator for this field's type.
+func (f GenericField[T]) Variant() Variant { return f.variant }
+
+// Key returns the semantic identifier for this field.
+func (f GenericField[T]) Key() Key { return f.key }
+
+// Value returns the underlying value as any.
+func (f GenericField[T]) Value() any { return f.value }
+
+// Get returns the typed value.
+func (f GenericField[T]) Get() T { return f.value }
 
 // workerState manages the lifecycle of a signal's worker goroutine.
 type workerState struct {

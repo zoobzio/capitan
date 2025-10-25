@@ -252,3 +252,166 @@ func TestObserverDoesNotReceiveAfterClose(t *testing.T) {
 		t.Errorf("expected 1 event (before close), got %d", finalCount)
 	}
 }
+
+func TestObserverWithWhitelist(t *testing.T) {
+	c := New()
+	defer c.Shutdown()
+
+	sig1 := Signal("test.whitelist.one")
+	sig2 := Signal("test.whitelist.two")
+	sig3 := Signal("test.whitelist.three")
+	key := NewStringKey("value")
+
+	// Hook all three signals
+	c.Hook(sig1, func(_ *Event) {})
+	c.Hook(sig2, func(_ *Event) {})
+	c.Hook(sig3, func(_ *Event) {})
+
+	var received []Signal
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	// Observer only watching sig1 and sig2 (whitelist)
+	wg.Add(2)
+	observer := c.Observe(func(e *Event) {
+		mu.Lock()
+		received = append(received, e.Signal())
+		mu.Unlock()
+		wg.Done()
+	}, sig1, sig2)
+	defer observer.Close()
+
+	// Emit to all three
+	c.Emit(sig1, key.Field("first"))
+	c.Emit(sig2, key.Field("second"))
+	c.Emit(sig3, key.Field("third"))
+
+	wg.Wait()
+
+	// Should only receive sig1 and sig2
+	if len(received) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(received))
+	}
+
+	found1, found2, found3 := false, false, false
+	for _, sig := range received {
+		if sig == sig1 {
+			found1 = true
+		}
+		if sig == sig2 {
+			found2 = true
+		}
+		if sig == sig3 {
+			found3 = true
+		}
+	}
+
+	if !found1 {
+		t.Error("expected sig1 to be received")
+	}
+	if !found2 {
+		t.Error("expected sig2 to be received")
+	}
+	if found3 {
+		t.Error("sig3 should not be received (not in whitelist)")
+	}
+}
+
+func TestObserverWhitelistFutureSignals(t *testing.T) {
+	c := New()
+	defer c.Shutdown()
+
+	sig1 := Signal("test.future.one")
+	sig2 := Signal("test.future.two")
+	sig3 := Signal("test.future.three")
+	key := NewStringKey("value")
+
+	var received []Signal
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	// Create observer BEFORE signals exist, with whitelist
+	wg.Add(2)
+	observer := c.Observe(func(e *Event) {
+		mu.Lock()
+		received = append(received, e.Signal())
+		mu.Unlock()
+		wg.Done()
+	}, sig1, sig3)
+	defer observer.Close()
+
+	// Now create signals and emit
+	c.Hook(sig1, func(_ *Event) {})
+	c.Hook(sig2, func(_ *Event) {})
+	c.Hook(sig3, func(_ *Event) {})
+
+	c.Emit(sig1, key.Field("first"))
+	c.Emit(sig2, key.Field("second"))
+	c.Emit(sig3, key.Field("third"))
+
+	wg.Wait()
+
+	// Should only receive sig1 and sig3
+	if len(received) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(received))
+	}
+
+	found1, found2, found3 := false, false, false
+	for _, sig := range received {
+		if sig == sig1 {
+			found1 = true
+		}
+		if sig == sig2 {
+			found2 = true
+		}
+		if sig == sig3 {
+			found3 = true
+		}
+	}
+
+	if !found1 {
+		t.Error("expected sig1 to be received")
+	}
+	if found2 {
+		t.Error("sig2 should not be received (not in whitelist)")
+	}
+	if !found3 {
+		t.Error("expected sig3 to be received")
+	}
+}
+
+func TestObserverNoWhitelistReceivesAll(t *testing.T) {
+	c := New()
+	defer c.Shutdown()
+
+	sig1 := Signal("test.all.one")
+	sig2 := Signal("test.all.two")
+	key := NewStringKey("value")
+
+	c.Hook(sig1, func(_ *Event) {})
+	c.Hook(sig2, func(_ *Event) {})
+
+	var received []Signal
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	// Observer with NO whitelist (should receive all)
+	wg.Add(2)
+	observer := c.Observe(func(e *Event) {
+		mu.Lock()
+		received = append(received, e.Signal())
+		mu.Unlock()
+		wg.Done()
+	})
+	defer observer.Close()
+
+	c.Emit(sig1, key.Field("first"))
+	c.Emit(sig2, key.Field("second"))
+
+	wg.Wait()
+
+	// Should receive both
+	if len(received) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(received))
+	}
+}

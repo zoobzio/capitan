@@ -57,9 +57,9 @@ func TestWorkerProcessesEventsAsync(t *testing.T) {
 	wg.Add(numEvents)
 
 	c.Hook(sig, func(e *Event) {
-		field := e.Get(key).(IntField)
+		field := e.Get(key).(GenericField[int])
 		mu.Lock()
-		received = append(received, field.Int())
+		received = append(received, field.Get())
 		mu.Unlock()
 		wg.Done()
 	})
@@ -211,6 +211,79 @@ func TestWorkerNoListeners(_ *testing.T) {
 	c.Emit(sig, key.Field("test"))
 
 	time.Sleep(10 * time.Millisecond)
+}
+
+func TestWorkerOnlyCreatedWithListeners(t *testing.T) {
+	c := New()
+	defer c.Shutdown()
+
+	sig := Signal("test.worker.creation")
+	key := NewStringKey("value")
+
+	// Emit without any listeners - worker should NOT be created
+	c.Emit(sig, key.Field("test"))
+
+	c.mu.RLock()
+	_, workerExists := c.workers[sig]
+	c.mu.RUnlock()
+
+	if workerExists {
+		t.Error("worker should not be created when emitting with no listeners")
+	}
+
+	// Now add a listener
+	c.Hook(sig, func(_ *Event) {})
+
+	// Emit with listener - worker SHOULD be created
+	c.Emit(sig, key.Field("test"))
+
+	c.mu.RLock()
+	_, workerExists = c.workers[sig]
+	c.mu.RUnlock()
+
+	if !workerExists {
+		t.Error("worker should be created when emitting with listeners present")
+	}
+}
+
+func TestWorkerNotCreatedOnHookOnly(t *testing.T) {
+	c := New()
+	defer c.Shutdown()
+
+	sig := Signal("test.hook.only")
+
+	// Just hook a listener without emitting
+	c.Hook(sig, func(_ *Event) {})
+
+	c.mu.RLock()
+	_, workerExists := c.workers[sig]
+	c.mu.RUnlock()
+
+	if workerExists {
+		t.Error("worker should not be created on Hook, only on Emit")
+	}
+}
+
+func TestWorkerCreatedWithObserver(t *testing.T) {
+	c := New()
+	defer c.Shutdown()
+
+	sig := Signal("test.observer.worker")
+	key := NewStringKey("value")
+
+	// Create an observer
+	c.Observe(func(_ *Event) {})
+
+	// Emit - observer should cause listener to be attached, and worker created
+	c.Emit(sig, key.Field("test"))
+
+	c.mu.RLock()
+	_, workerExists := c.workers[sig]
+	c.mu.RUnlock()
+
+	if !workerExists {
+		t.Error("worker should be created when emitting with observer present")
+	}
 }
 
 func TestWorkerMultipleSignalsIsolated(t *testing.T) {

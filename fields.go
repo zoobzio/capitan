@@ -11,9 +11,9 @@ func (k StringKey) Name() string { return k.name }
 // Variant returns the type constraint.
 func (StringKey) Variant() Variant { return VariantString }
 
-// Field creates a StringField with this key and the given value.
+// Field creates a GenericField with this key and the given value.
 func (k StringKey) Field(value string) Field {
-	return StringField{key: k, value: value}
+	return GenericField[string]{key: k, value: value, variant: k.Variant()}
 }
 
 // From extracts the typed string value for this key from the event.
@@ -23,8 +23,8 @@ func (k StringKey) From(e *Event) (string, bool) {
 	if f == nil {
 		return "", false
 	}
-	if sf, ok := f.(StringField); ok {
-		return sf.String(), true
+	if sf, ok := f.(GenericField[string]); ok {
+		return sf.Get(), true
 	}
 	return "", false
 }
@@ -45,9 +45,9 @@ func (k IntKey) Name() string { return k.name }
 // Variant returns the type constraint.
 func (IntKey) Variant() Variant { return VariantInt }
 
-// Field creates an IntField with this key and the given value.
+// Field creates a GenericField with this key and the given value.
 func (k IntKey) Field(value int) Field {
-	return IntField{key: k, value: value}
+	return GenericField[int]{key: k, value: value, variant: k.Variant()}
 }
 
 // From extracts the typed int value for this key from the event.
@@ -57,8 +57,8 @@ func (k IntKey) From(e *Event) (int, bool) {
 	if f == nil {
 		return 0, false
 	}
-	if intf, ok := f.(IntField); ok {
-		return intf.Int(), true
+	if intf, ok := f.(GenericField[int]); ok {
+		return intf.Get(), true
 	}
 	return 0, false
 }
@@ -79,9 +79,9 @@ func (k Float64Key) Name() string { return k.name }
 // Variant returns the type constraint.
 func (Float64Key) Variant() Variant { return VariantFloat64 }
 
-// Field creates a Float64Field with this key and the given value.
+// Field creates a GenericField with this key and the given value.
 func (k Float64Key) Field(value float64) Field {
-	return Float64Field{key: k, value: value}
+	return GenericField[float64]{key: k, value: value, variant: k.Variant()}
 }
 
 // From extracts the typed float64 value for this key from the event.
@@ -91,8 +91,8 @@ func (k Float64Key) From(e *Event) (float64, bool) {
 	if f == nil {
 		return 0, false
 	}
-	if ff, ok := f.(Float64Field); ok {
-		return ff.Float64(), true
+	if ff, ok := f.(GenericField[float64]); ok {
+		return ff.Get(), true
 	}
 	return 0, false
 }
@@ -113,9 +113,9 @@ func (k BoolKey) Name() string { return k.name }
 // Variant returns the type constraint.
 func (BoolKey) Variant() Variant { return VariantBool }
 
-// Field creates a BoolField with this key and the given value.
+// Field creates a GenericField with this key and the given value.
 func (k BoolKey) Field(value bool) Field {
-	return BoolField{key: k, value: value}
+	return GenericField[bool]{key: k, value: value, variant: k.Variant()}
 }
 
 // From extracts the typed bool value for this key from the event.
@@ -125,8 +125,8 @@ func (k BoolKey) From(e *Event) (value bool, ok bool) {
 	if f == nil {
 		return false, false
 	}
-	if bf, fieldOk := f.(BoolField); fieldOk {
-		return bf.Bool(), true
+	if bf, fieldOk := f.(GenericField[bool]); fieldOk {
+		return bf.Get(), true
 	}
 	return false, false
 }
@@ -135,55 +135,3 @@ func (k BoolKey) From(e *Event) (value bool, ok bool) {
 func NewBoolKey(name string) BoolKey {
 	return BoolKey{name: name}
 }
-
-// StringField represents a string value with semantic meaning.
-type StringField struct {
-	key   Key
-	value string
-}
-
-func (StringField) Variant() Variant { return VariantString }
-func (f StringField) Key() Key       { return f.key }
-func (f StringField) Value() any     { return f.value }
-
-// String returns the typed string value.
-func (f StringField) String() string { return f.value }
-
-// IntField represents an int value with semantic meaning.
-type IntField struct {
-	key   Key
-	value int
-}
-
-func (IntField) Variant() Variant { return VariantInt }
-func (f IntField) Key() Key       { return f.key }
-func (f IntField) Value() any     { return f.value }
-
-// Int returns the typed int value.
-func (f IntField) Int() int { return f.value }
-
-// Float64Field represents a float64 value with semantic meaning.
-type Float64Field struct {
-	key   Key
-	value float64
-}
-
-func (Float64Field) Variant() Variant { return VariantFloat64 }
-func (f Float64Field) Key() Key       { return f.key }
-func (f Float64Field) Value() any     { return f.value }
-
-// Float64 returns the typed float64 value.
-func (f Float64Field) Float64() float64 { return f.value }
-
-// BoolField represents a bool value with semantic meaning.
-type BoolField struct {
-	key   Key
-	value bool
-}
-
-func (BoolField) Variant() Variant { return VariantBool }
-func (f BoolField) Key() Key       { return f.key }
-func (f BoolField) Value() any     { return f.value }
-
-// Bool returns the typed bool value.
-func (f BoolField) Bool() bool { return f.value }

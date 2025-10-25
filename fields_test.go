@@ -33,13 +33,13 @@ func TestStringField(t *testing.T) {
 		t.Errorf("expected value %q, got %v", "hello", field.Value())
 	}
 
-	sf, ok := field.(StringField)
+	sf, ok := field.(GenericField[string])
 	if !ok {
-		t.Fatal("field not StringField type")
+		t.Fatal("field not GenericField[string] type")
 	}
 
-	if sf.String() != "hello" {
-		t.Errorf("expected %q, got %q", "hello", sf.String())
+	if sf.Get() != "hello" {
+		t.Errorf("expected %q, got %q", "hello", sf.Get())
 	}
 }
 
@@ -71,13 +71,13 @@ func TestIntField(t *testing.T) {
 		t.Errorf("expected value %d, got %v", 42, field.Value())
 	}
 
-	inf, ok := field.(IntField)
+	inf, ok := field.(GenericField[int])
 	if !ok {
-		t.Fatal("field not IntField type")
+		t.Fatal("field not GenericField[int] type")
 	}
 
-	if inf.Int() != 42 {
-		t.Errorf("expected %d, got %d", 42, inf.Int())
+	if inf.Get() != 42 {
+		t.Errorf("expected %d, got %d", 42, inf.Get())
 	}
 }
 
@@ -109,13 +109,13 @@ func TestFloat64Field(t *testing.T) {
 		t.Errorf("expected value %f, got %v", 3.14, field.Value())
 	}
 
-	ff, ok := field.(Float64Field)
+	ff, ok := field.(GenericField[float64])
 	if !ok {
-		t.Fatal("field not Float64Field type")
+		t.Fatal("field not GenericField[float64] type")
 	}
 
-	if ff.Float64() != 3.14 {
-		t.Errorf("expected %f, got %f", 3.14, ff.Float64())
+	if ff.Get() != 3.14 {
+		t.Errorf("expected %f, got %f", 3.14, ff.Get())
 	}
 }
 
@@ -147,13 +147,13 @@ func TestBoolField(t *testing.T) {
 		t.Errorf("expected value %v, got %v", true, field.Value())
 	}
 
-	bf, ok := field.(BoolField)
+	bf, ok := field.(GenericField[bool])
 	if !ok {
-		t.Fatal("field not BoolField type")
+		t.Fatal("field not GenericField[bool] type")
 	}
 
-	if bf.Bool() != true {
-		t.Errorf("expected %v, got %v", true, bf.Bool())
+	if bf.Get() != true {
+		t.Errorf("expected %v, got %v", true, bf.Get())
 	}
 }
 
@@ -267,4 +267,132 @@ func TestFromMethods(t *testing.T) {
 	)
 
 	wg.Wait()
+}
+
+// Custom struct type for testing custom fields.
+type OrderInfo struct {
+	ID     string
+	Total  float64
+	Items  int
+	Active bool
+}
+
+// Custom variant.
+const VariantOrderInfo Variant = "test.OrderInfo"
+
+// Custom key implementation.
+type OrderInfoKey struct {
+	name string
+}
+
+func NewOrderInfoKey(name string) OrderInfoKey {
+	return OrderInfoKey{name: name}
+}
+
+func (k OrderInfoKey) Name() string   { return k.name }
+func (OrderInfoKey) Variant() Variant { return VariantOrderInfo }
+func (k OrderInfoKey) Field(value OrderInfo) Field {
+	return GenericField[OrderInfo]{
+		key:     k,
+		value:   value,
+		variant: k.Variant(),
+	}
+}
+
+func (k OrderInfoKey) From(e *Event) (OrderInfo, bool) {
+	f := e.Get(k)
+	if f == nil {
+		return OrderInfo{}, false
+	}
+	if gf, ok := f.(GenericField[OrderInfo]); ok {
+		return gf.Get(), true
+	}
+	return OrderInfo{}, false
+}
+
+func TestCustomStructField(t *testing.T) {
+	c := New()
+	defer c.Shutdown()
+
+	sig := Signal("test.custom")
+	orderKey := NewOrderInfoKey("order")
+
+	expectedOrder := OrderInfo{
+		ID:     "ORDER-123",
+		Total:  99.99,
+		Items:  3,
+		Active: true,
+	}
+
+	var receivedOrder OrderInfo
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	c.Hook(sig, func(e *Event) {
+		order, ok := orderKey.From(e)
+		if !ok {
+			t.Error("failed to extract order from event")
+		}
+		receivedOrder = order
+		wg.Done()
+	})
+
+	c.Emit(sig, orderKey.Field(expectedOrder))
+
+	wg.Wait()
+
+	if receivedOrder.ID != expectedOrder.ID {
+		t.Errorf("ID: expected %q, got %q", expectedOrder.ID, receivedOrder.ID)
+	}
+	if receivedOrder.Total != expectedOrder.Total {
+		t.Errorf("Total: expected %.2f, got %.2f", expectedOrder.Total, receivedOrder.Total)
+	}
+	if receivedOrder.Items != expectedOrder.Items {
+		t.Errorf("Items: expected %d, got %d", expectedOrder.Items, receivedOrder.Items)
+	}
+	if receivedOrder.Active != expectedOrder.Active {
+		t.Errorf("Active: expected %v, got %v", expectedOrder.Active, receivedOrder.Active)
+	}
+}
+
+func TestCustomStructFieldVariant(t *testing.T) {
+	orderKey := NewOrderInfoKey("order")
+	field := orderKey.Field(OrderInfo{ID: "TEST"})
+
+	if field.Variant() != VariantOrderInfo {
+		t.Errorf("expected variant %v, got %v", VariantOrderInfo, field.Variant())
+	}
+}
+
+func TestCustomStructFieldTypeAssertion(t *testing.T) {
+	orderKey := NewOrderInfoKey("order")
+	expectedOrder := OrderInfo{
+		ID:     "ORDER-456",
+		Total:  199.99,
+		Items:  5,
+		Active: false,
+	}
+
+	field := orderKey.Field(expectedOrder)
+
+	// Test type assertion
+	gf, ok := field.(GenericField[OrderInfo])
+	if !ok {
+		t.Fatal("field not GenericField[OrderInfo] type")
+	}
+
+	receivedOrder := gf.Get()
+
+	if receivedOrder.ID != expectedOrder.ID {
+		t.Errorf("ID: expected %q, got %q", expectedOrder.ID, receivedOrder.ID)
+	}
+	if receivedOrder.Total != expectedOrder.Total {
+		t.Errorf("Total: expected %.2f, got %.2f", expectedOrder.Total, receivedOrder.Total)
+	}
+	if receivedOrder.Items != expectedOrder.Items {
+		t.Errorf("Items: expected %d, got %d", expectedOrder.Items, receivedOrder.Items)
+	}
+	if receivedOrder.Active != expectedOrder.Active {
+		t.Errorf("Active: expected %v, got %v", expectedOrder.Active, receivedOrder.Active)
+	}
 }

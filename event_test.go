@@ -17,12 +17,12 @@ func TestEventGet(t *testing.T) {
 		t.Fatal("name field not found")
 	}
 
-	sf, ok := nameField.(StringField)
+	sf, ok := nameField.(GenericField[string])
 	if !ok {
 		t.Fatal("name field wrong type")
 	}
-	if sf.String() != "test" {
-		t.Errorf("expected %q, got %q", "test", sf.String())
+	if sf.Get() != "test" {
+		t.Errorf("expected %q, got %q", "test", sf.Get())
 	}
 
 	countField := event.Get(intKey)
@@ -30,12 +30,12 @@ func TestEventGet(t *testing.T) {
 		t.Fatal("count field not found")
 	}
 
-	cf, ok := countField.(IntField)
+	cf, ok := countField.(GenericField[int])
 	if !ok {
 		t.Fatal("count field wrong type")
 	}
-	if cf.Int() != 42 {
-		t.Errorf("expected %d, got %d", 42, cf.Int())
+	if cf.Get() != 42 {
+		t.Errorf("expected %d, got %d", 42, cf.Get())
 	}
 }
 
@@ -74,16 +74,16 @@ func TestEventFields(t *testing.T) {
 	foundStr, foundInt, foundBool := false, false, false
 	for _, field := range fields {
 		switch f := field.(type) {
-		case StringField:
-			if f.String() == "test" {
+		case GenericField[string]:
+			if f.Get() == "test" {
 				foundStr = true
 			}
-		case IntField:
-			if f.Int() == 42 {
+		case GenericField[int]:
+			if f.Get() == 42 {
 				foundInt = true
 			}
-		case BoolField:
-			if f.Bool() == true {
+		case GenericField[bool]:
+			if f.Get() == true {
 				foundBool = true
 			}
 		}
@@ -130,9 +130,9 @@ func TestEventPooling(t *testing.T) {
 
 	// Create first event with "first" value
 	event1 := newEvent(sig, key.Field("first"))
-	field1 := event1.Get(key).(StringField)
-	if field1.String() != "first" {
-		t.Errorf("event1: expected %q, got %q", "first", field1.String())
+	field1 := event1.Get(key).(GenericField[string])
+	if field1.Get() != "first" {
+		t.Errorf("event1: expected %q, got %q", "first", field1.Get())
 	}
 
 	// Return to pool
@@ -140,13 +140,13 @@ func TestEventPooling(t *testing.T) {
 
 	// Create second event with "second" value
 	event2 := newEvent(sig, key.Field("second"))
-	field2 := event2.Get(key).(StringField)
-	if field2.String() != "second" {
-		t.Errorf("event2: expected %q, got %q - pool not cleared properly", "second", field2.String())
+	field2 := event2.Get(key).(GenericField[string])
+	if field2.Get() != "second" {
+		t.Errorf("event2: expected %q, got %q - pool not cleared properly", "second", field2.Get())
 	}
 
 	// Verify field was cleared (whether pooled or not, fields should be correct)
-	if field2.String() == "first" {
+	if field2.Get() == "first" {
 		t.Error("fields not cleared when reusing pooled event")
 	}
 }

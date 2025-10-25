@@ -73,9 +73,9 @@ func TestEmitAsyncProcessing(t *testing.T) {
 	wg.Add(numEmissions)
 
 	c.Hook(sig, func(e *Event) {
-		field := e.Get(key).(IntField)
+		field := e.Get(key).(GenericField[int])
 		mu.Lock()
-		received = append(received, field.Int())
+		received = append(received, field.Get())
 		mu.Unlock()
 		wg.Done()
 	})
@@ -104,14 +104,14 @@ func TestEmitWithMultipleListeners(t *testing.T) {
 	wg.Add(2)
 
 	c.Hook(sig, func(e *Event) {
-		field := e.Get(key).(StringField)
-		received1 = field.String()
+		field := e.Get(key).(GenericField[string])
+		received1 = field.Get()
 		wg.Done()
 	})
 
 	c.Hook(sig, func(e *Event) {
-		field := e.Get(key).(StringField)
-		received2 = field.String()
+		field := e.Get(key).(GenericField[string])
+		received2 = field.Get()
 		wg.Done()
 	})
 

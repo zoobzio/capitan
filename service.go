@@ -68,16 +68,20 @@ func (c *Capitan) Hook(signal Signal, callback EventCallback) *Listener {
 }
 
 // Observe registers a callback for all signals on the default instance (dynamic).
+// If signals are provided, only those signals will be observed (whitelist).
+// If no signals are provided, all signals will be observed.
 // The observer will receive events from both existing and future signals.
 // Returns an Observer that can be closed to unregister.
-func Observe(callback EventCallback) *Observer {
-	return defaultInstance().Observe(callback)
+func Observe(callback EventCallback, signals ...Signal) *Observer {
+	return defaultInstance().Observe(callback, signals...)
 }
 
 // Observe registers a callback for all signals (dynamic).
+// If signals are provided, only those signals will be observed (whitelist).
+// If no signals are provided, all signals will be observed.
 // The observer will receive events from both existing and future signals.
 // Returns an Observer that can be closed to unregister all listeners.
-func (c *Capitan) Observe(callback EventCallback) *Observer {
+func (c *Capitan) Observe(callback EventCallback, signals ...Signal) *Observer {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -86,10 +90,26 @@ func (c *Capitan) Observe(callback EventCallback) *Observer {
 		callback:  callback,
 		capitan:   c,
 		active:    true,
+		signals:   nil, // nil = observe all
 	}
 
-	// Hook all existing signals
+	// Build whitelist if signals provided
+	if len(signals) > 0 {
+		o.signals = make(map[Signal]struct{}, len(signals))
+		for _, sig := range signals {
+			o.signals[sig] = struct{}{}
+		}
+	}
+
+	// Hook existing signals (filtered by whitelist if present)
 	for signal := range c.registry {
+		// Skip if whitelist exists and signal not in it
+		if o.signals != nil {
+			if _, ok := o.signals[signal]; !ok {
+				continue
+			}
+		}
+
 		listener := &Listener{
 			signal:   signal,
 			callback: callback,
@@ -116,6 +136,14 @@ func (c *Capitan) attachObservers(signal Signal) {
 	for _, obs := range c.observers {
 		obs.mu.Lock()
 		if obs.active {
+			// Skip if observer has whitelist and signal not in it
+			if obs.signals != nil {
+				if _, ok := obs.signals[signal]; !ok {
+					obs.mu.Unlock()
+					continue
+				}
+			}
+
 			obsListener := &Listener{
 				signal:   signal,
 				callback: obs.callback,

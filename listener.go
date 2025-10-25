@@ -27,6 +27,7 @@ type Observer struct {
 	callback  EventCallback
 	capitan   *Capitan
 	active    bool
+	signals   map[Signal]struct{} // nil = all signals, non-nil = whitelist
 	mu        sync.Mutex
 }
 
