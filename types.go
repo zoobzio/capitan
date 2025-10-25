@@ -4,17 +4,20 @@
 // Hook listeners to specific signals, and Observe all signals. Events are processed
 // asynchronously with per-signal worker goroutines for isolation and performance.
 //
+// Context Support: All events carry a context.Context for cancellation, timeouts,
+// and request-scoped values. Canceled contexts prevent event queueing and processing.
+//
 // Quick example:
 //
 //	sig := capitan.Signal("order.created")
 //	orderID := capitan.NewStringKey("order_id")
 //
-//	capitan.Hook(sig, func(e *capitan.Event) {
-//	    id := orderID.From(e)
+//	capitan.Hook(sig, func(ctx context.Context, e *capitan.Event) {
+//	    id, _ := orderID.From(e)
 //	    // Process order...
 //	})
 //
-//	capitan.Emit(sig, orderID.Field("ORDER-123"))
+//	capitan.Emit(context.Background(), sig, orderID.Field("ORDER-123"))
 //	capitan.Shutdown() // Drain pending events
 //
 // See https://github.com/zoobzio/capitan for full documentation.
@@ -80,4 +83,23 @@ func (f GenericField[T]) Get() T { return f.value }
 type workerState struct {
 	events chan *Event   // buffered channel for queuing events
 	done   chan struct{} // signals worker to drain and exit
+}
+
+// Option configures a Capitan instance.
+type Option func(*Capitan)
+
+// PanicHandler is called when a listener panics during event processing.
+// Receives the signal being processed and the recovered panic value.
+type PanicHandler func(signal Signal, recovered any)
+
+// Stats provides runtime metrics for a Capitan instance.
+type Stats struct {
+	// ActiveWorkers is the number of worker goroutines currently running.
+	ActiveWorkers int
+
+	// QueueDepths maps each signal to the number of events queued in its buffer.
+	QueueDepths map[Signal]int
+
+	// ListenerCounts maps each signal to the number of registered listeners.
+	ListenerCounts map[Signal]int
 }

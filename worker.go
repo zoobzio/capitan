@@ -1,16 +1,13 @@
 package capitan
 
-const (
-	// defaultBufferSize is the default channel buffer size for event queues.
-	// Each signal gets its own buffered channel with this capacity.
-	defaultBufferSize = 16
-)
+import "context"
 
-// Emit dispatches an event with the given signal and fields.
+// Emit dispatches an event with the given context, signal and fields.
 // Queues the event for asynchronous processing by the signal's worker goroutine.
 // Creates a worker goroutine lazily on first emission to this signal.
 // Silently drops events if no listeners are registered for the signal.
-func (c *Capitan) Emit(signal Signal, fields ...Field) {
+// If the context is canceled before the event can be queued, the event is dropped.
+func (c *Capitan) Emit(ctx context.Context, signal Signal, fields ...Field) {
 	// Fast path: check if worker already exists (read lock)
 	c.mu.RLock()
 	_, exists := c.workers[signal]
@@ -44,7 +41,7 @@ func (c *Capitan) Emit(signal Signal, fields ...Field) {
 
 			// Create worker only if listeners exist
 			newWorker := &workerState{
-				events: make(chan *Event, defaultBufferSize),
+				events: make(chan *Event, c.bufferSize),
 				done:   make(chan struct{}),
 			}
 			c.workers[signal] = newWorker
@@ -56,7 +53,7 @@ func (c *Capitan) Emit(signal Signal, fields ...Field) {
 	}
 
 	// Create event from pool
-	event := newEvent(signal, fields...)
+	event := newEvent(ctx, signal, fields...)
 
 	// Capture worker reference atomically to avoid TOCTOU race
 	c.mu.RLock()
@@ -73,6 +70,12 @@ func (c *Capitan) Emit(signal Signal, fields ...Field) {
 	select {
 	case worker.events <- event:
 		// Event queued successfully
+	case <-ctx.Done():
+		// Context canceled while waiting to queue
+		eventPool.Put(event)
+	case <-worker.done:
+		// Worker shutting down, drop event
+		eventPool.Put(event)
 	case <-c.shutdown:
 		// Global shutdown fired while waiting to send
 		eventPool.Put(event)
@@ -81,7 +84,15 @@ func (c *Capitan) Emit(signal Signal, fields ...Field) {
 
 // processEvent invokes all listeners for a signal with the given event.
 // Handles panic recovery and returns event to pool.
+// Skips processing if the event's context has been canceled.
 func (c *Capitan) processEvent(signal Signal, event *Event) {
+	// Check if context was canceled while event was queued
+	if event.ctx.Err() != nil {
+		// Skip canceled events
+		eventPool.Put(event)
+		return
+	}
+
 	// Copy listener slice while holding lock to prevent data race
 	c.mu.RLock()
 	listeners := make([]*Listener, len(c.registry[signal]))
@@ -92,9 +103,11 @@ func (c *Capitan) processEvent(signal Signal, event *Event) {
 	for _, listener := range listeners {
 		func() {
 			defer func() {
-				_ = recover() //nolint:errcheck // Intentionally discard panic value
+				if r := recover(); r != nil && c.panicHandler != nil {
+					c.panicHandler(signal, r)
+				}
 			}()
-			listener.callback(event)
+			listener.callback(event.ctx, event)
 		}()
 	}
 

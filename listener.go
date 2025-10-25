@@ -1,11 +1,16 @@
 package capitan
 
-import "sync"
+import (
+	"context"
+	"sync"
+)
 
 // EventCallback is a function that handles an Event.
+// The context is inherited from the Emit call and can be used for cancellation,
+// timeouts, and accessing request-scoped values.
 // Handlers are responsible for their own error handling and logging.
 // Events must not be modified by listeners.
-type EventCallback func(*Event)
+type EventCallback func(context.Context, *Event)
 
 // Listener represents an active subscription to a signal.
 // Call Close() to unregister the listener and prevent further callbacks.

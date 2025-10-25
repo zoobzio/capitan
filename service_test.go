@@ -1,6 +1,7 @@
 package capitan
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -41,11 +42,11 @@ func TestEmitCreatesWorkerLazily(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	c.Hook(sig, func(_ *Event) {
+	c.Hook(sig, func(_ context.Context, _ *Event) {
 		wg.Done()
 	})
 
-	c.Emit(sig, key.Field("test"))
+	c.Emit(context.Background(), sig, key.Field("test"))
 
 	// After emit, worker should exist
 	c.mu.RLock()
@@ -72,7 +73,7 @@ func TestEmitAsyncProcessing(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(numEmissions)
 
-	c.Hook(sig, func(e *Event) {
+	c.Hook(sig, func(_ context.Context, e *Event) {
 		field := e.Get(key).(GenericField[int])
 		mu.Lock()
 		received = append(received, field.Get())
@@ -82,7 +83,7 @@ func TestEmitAsyncProcessing(t *testing.T) {
 
 	// Emit many events rapidly - should not block
 	for i := 0; i < numEmissions; i++ {
-		c.Emit(sig, key.Field(i))
+		c.Emit(context.Background(), sig, key.Field(i))
 	}
 
 	wg.Wait()
@@ -103,19 +104,19 @@ func TestEmitWithMultipleListeners(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	c.Hook(sig, func(e *Event) {
+	c.Hook(sig, func(_ context.Context, e *Event) {
 		field := e.Get(key).(GenericField[string])
 		received1 = field.Get()
 		wg.Done()
 	})
 
-	c.Hook(sig, func(e *Event) {
+	c.Hook(sig, func(_ context.Context, e *Event) {
 		field := e.Get(key).(GenericField[string])
 		received2 = field.Get()
 		wg.Done()
 	})
 
-	c.Emit(sig, key.Field("hello"))
+	c.Emit(context.Background(), sig, key.Field("hello"))
 
 	wg.Wait()
 
@@ -135,7 +136,7 @@ func TestEmitWithNoListeners(_ *testing.T) {
 	key := NewStringKey("value")
 
 	// Should not panic or block
-	c.Emit(sig, key.Field("test"))
+	c.Emit(context.Background(), sig, key.Field("test"))
 
 	// Give time for any processing
 	time.Sleep(10 * time.Millisecond)
@@ -152,16 +153,16 @@ func TestEmitWithPanicRecovery(t *testing.T) {
 	wg.Add(1)
 
 	// First listener panics
-	c.Hook(sig, func(_ *Event) {
+	c.Hook(sig, func(_ context.Context, _ *Event) {
 		panic("intentional panic")
 	})
 
 	// Second listener should still execute
-	c.Hook(sig, func(_ *Event) {
+	c.Hook(sig, func(_ context.Context, _ *Event) {
 		wg.Done()
 	})
 
-	c.Emit(sig, key.Field("test"))
+	c.Emit(context.Background(), sig, key.Field("test"))
 
 	// If panic recovery doesn't work, this times out
 	done := make(chan struct{})
@@ -189,7 +190,7 @@ func TestHook(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	listener := c.Hook(sig, func(e *Event) {
+	listener := c.Hook(sig, func(_ context.Context, e *Event) {
 		received = e
 		wg.Done()
 	})
@@ -198,7 +199,7 @@ func TestHook(t *testing.T) {
 		t.Fatal("Hook returned nil")
 	}
 
-	c.Emit(sig, key.Field("test"))
+	c.Emit(context.Background(), sig, key.Field("test"))
 
 	wg.Wait()
 
@@ -216,15 +217,15 @@ func TestObserve(t *testing.T) {
 	key := NewStringKey("msg")
 
 	// Create hooks first so signals exist in registry
-	c.Hook(sig1, func(_ *Event) {})
-	c.Hook(sig2, func(_ *Event) {})
+	c.Hook(sig1, func(_ context.Context, _ *Event) {})
+	c.Hook(sig2, func(_ context.Context, _ *Event) {})
 
 	var received []Signal
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	observer := c.Observe(func(e *Event) {
+	observer := c.Observe(func(_ context.Context, e *Event) {
 		mu.Lock()
 		received = append(received, e.Signal())
 		mu.Unlock()
@@ -235,8 +236,8 @@ func TestObserve(t *testing.T) {
 		t.Fatal("Observe returned nil")
 	}
 
-	c.Emit(sig1, key.Field("first"))
-	c.Emit(sig2, key.Field("second"))
+	c.Emit(context.Background(), sig1, key.Field("first"))
+	c.Emit(context.Background(), sig2, key.Field("second"))
 
 	wg.Wait()
 
@@ -269,13 +270,13 @@ func TestShutdown(_ *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	c.Hook(sig, func(_ *Event) {
+	c.Hook(sig, func(_ context.Context, _ *Event) {
 		// Simulate some work
 		time.Sleep(10 * time.Millisecond)
 		wg.Done()
 	})
 
-	c.Emit(sig, key.Field("test"))
+	c.Emit(context.Background(), sig, key.Field("test"))
 
 	// Shutdown should wait for in-flight events
 	c.Shutdown()
@@ -292,7 +293,7 @@ func TestModuleLevelAPI(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	listener := Hook(sig, func(e *Event) {
+	listener := Hook(sig, func(_ context.Context, e *Event) {
 		received = e
 		wg.Done()
 	})
@@ -301,7 +302,7 @@ func TestModuleLevelAPI(t *testing.T) {
 		t.Fatal("Hook returned nil")
 	}
 
-	Emit(sig, key.Field("test"))
+	Emit(context.Background(), sig, key.Field("test"))
 
 	wg.Wait()
 
@@ -311,4 +312,170 @@ func TestModuleLevelAPI(t *testing.T) {
 	if received.Signal() != sig {
 		t.Errorf("expected signal %q, got %q", sig, received.Signal())
 	}
+}
+
+func TestListenerReceivesContext(t *testing.T) {
+	c := New()
+	defer c.Shutdown()
+
+	sig := Signal("test.ctx.value")
+	key := NewStringKey("value")
+
+	type ctxKey string
+	const testKey ctxKey = "test_key"
+	expectedValue := "test_value"
+
+	var received string
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	c.Hook(sig, func(ctx context.Context, _ *Event) {
+		received = ctx.Value(testKey).(string)
+		wg.Done()
+	})
+
+	ctx := context.WithValue(context.Background(), testKey, expectedValue)
+	c.Emit(ctx, sig, key.Field("test"))
+
+	wg.Wait()
+
+	if received != expectedValue {
+		t.Errorf("expected %q, got %q", expectedValue, received)
+	}
+}
+
+func TestContextIsolationPerSignal(t *testing.T) {
+	c := New()
+	defer c.Shutdown()
+
+	sig1 := Signal("test.iso.one")
+	sig2 := Signal("test.iso.two")
+	key := NewStringKey("value")
+
+	type ctxKey string
+	const valKey ctxKey = "val"
+
+	var val1, val2 string
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	c.Hook(sig1, func(ctx context.Context, _ *Event) {
+		val1 = ctx.Value(valKey).(string)
+		wg.Done()
+	})
+
+	c.Hook(sig2, func(ctx context.Context, _ *Event) {
+		val2 = ctx.Value(valKey).(string)
+		wg.Done()
+	})
+
+	ctx1 := context.WithValue(context.Background(), valKey, "A")
+	ctx2 := context.WithValue(context.Background(), valKey, "B")
+
+	c.Emit(ctx1, sig1, key.Field("first"))
+	c.Emit(ctx2, sig2, key.Field("second"))
+
+	wg.Wait()
+
+	if val1 != "A" {
+		t.Errorf("sig1: expected %q, got %q", "A", val1)
+	}
+	if val2 != "B" {
+		t.Errorf("sig2: expected %q, got %q", "B", val2)
+	}
+}
+
+func TestModuleLevelConfigure(t *testing.T) {
+	// Test that Configure can be called without panicking
+	// Note: Configure only affects the default instance if called before first use
+	// Since other tests may have already used the default instance, we just verify
+	// that Configure is callable. Actual option behavior is tested in config_test.go
+
+	Configure(
+		WithBufferSize(32),
+		WithPanicHandler(func(_ Signal, _ any) {
+			// Handler for coverage
+		}),
+	)
+
+	// Verify the default instance still works after Configure
+	sig := Signal("test.configure")
+	key := NewStringKey("value")
+
+	var received bool
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	Hook(sig, func(_ context.Context, _ *Event) {
+		received = true
+		wg.Done()
+	})
+
+	Emit(context.Background(), sig, key.Field("test"))
+
+	wg.Wait()
+
+	if !received {
+		t.Error("event not received after Configure")
+	}
+}
+
+func TestModuleLevelObserve(t *testing.T) {
+	sig1 := Signal("test.observe.1")
+	sig2 := Signal("test.observe.2")
+	key := NewStringKey("msg")
+
+	Hook(sig1, func(_ context.Context, _ *Event) {})
+	Hook(sig2, func(_ context.Context, _ *Event) {})
+
+	var received []Signal
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	observer := Observe(func(_ context.Context, e *Event) {
+		mu.Lock()
+		received = append(received, e.Signal())
+		mu.Unlock()
+		wg.Done()
+	})
+
+	if observer == nil {
+		t.Fatal("Observe returned nil")
+	}
+
+	Emit(context.Background(), sig1, key.Field("first"))
+	Emit(context.Background(), sig2, key.Field("second"))
+
+	wg.Wait()
+
+	if len(received) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(received))
+	}
+}
+
+func TestModuleLevelShutdown(t *testing.T) {
+	sig := Signal("test.shutdown.module")
+	key := NewStringKey("value")
+
+	var processed bool
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	Hook(sig, func(_ context.Context, _ *Event) {
+		time.Sleep(10 * time.Millisecond)
+		processed = true
+		wg.Done()
+	})
+
+	Emit(context.Background(), sig, key.Field("test"))
+
+	// Shutdown should wait for event processing
+	Shutdown()
+
+	if !processed {
+		t.Error("event not processed before shutdown")
+	}
+
+	wg.Wait()
 }

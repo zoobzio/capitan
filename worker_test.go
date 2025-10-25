@@ -1,6 +1,7 @@
 package capitan
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -25,11 +26,11 @@ func TestWorkerCreatedLazily(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	c.Hook(sig, func(_ *Event) {
+	c.Hook(sig, func(_ context.Context, _ *Event) {
 		wg.Done()
 	})
 
-	c.Emit(sig, key.Field("test"))
+	c.Emit(context.Background(), sig, key.Field("test"))
 
 	// After emit, worker should exist
 	c.mu.RLock()
@@ -56,7 +57,7 @@ func TestWorkerProcessesEventsAsync(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(numEvents)
 
-	c.Hook(sig, func(e *Event) {
+	c.Hook(sig, func(_ context.Context, e *Event) {
 		field := e.Get(key).(GenericField[int])
 		mu.Lock()
 		received = append(received, field.Get())
@@ -67,7 +68,7 @@ func TestWorkerProcessesEventsAsync(t *testing.T) {
 	// Emit many events rapidly - should not block caller
 	start := time.Now()
 	for i := 0; i < numEvents; i++ {
-		c.Emit(sig, key.Field(i))
+		c.Emit(context.Background(), sig, key.Field(i))
 	}
 	emitDuration := time.Since(start)
 
@@ -95,28 +96,28 @@ func TestWorkerInvokesAllListeners(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(3)
 
-	c.Hook(sig, func(_ *Event) {
+	c.Hook(sig, func(_ context.Context, _ *Event) {
 		mu.Lock()
 		count1++
 		mu.Unlock()
 		wg.Done()
 	})
 
-	c.Hook(sig, func(_ *Event) {
+	c.Hook(sig, func(_ context.Context, _ *Event) {
 		mu.Lock()
 		count2++
 		mu.Unlock()
 		wg.Done()
 	})
 
-	c.Hook(sig, func(_ *Event) {
+	c.Hook(sig, func(_ context.Context, _ *Event) {
 		mu.Lock()
 		count3++
 		mu.Unlock()
 		wg.Done()
 	})
 
-	c.Emit(sig, key.Field("test"))
+	c.Emit(context.Background(), sig, key.Field("test"))
 
 	wg.Wait()
 
@@ -139,16 +140,16 @@ func TestWorkerPanicRecovery(t *testing.T) {
 	wg.Add(1)
 
 	// First listener panics
-	c.Hook(sig, func(_ *Event) {
+	c.Hook(sig, func(_ context.Context, _ *Event) {
 		panic("intentional panic")
 	})
 
 	// Second listener should still execute
-	c.Hook(sig, func(_ *Event) {
+	c.Hook(sig, func(_ context.Context, _ *Event) {
 		wg.Done()
 	})
 
-	c.Emit(sig, key.Field("test"))
+	c.Emit(context.Background(), sig, key.Field("test"))
 
 	done := make(chan struct{})
 	go func() {
@@ -175,7 +176,7 @@ func TestWorkerShutdownDrainsQueue(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(5)
 
-	c.Hook(sig, func(_ *Event) {
+	c.Hook(sig, func(_ context.Context, _ *Event) {
 		time.Sleep(10 * time.Millisecond)
 		mu.Lock()
 		processed++
@@ -185,7 +186,7 @@ func TestWorkerShutdownDrainsQueue(t *testing.T) {
 
 	// Emit multiple events
 	for i := 0; i < 5; i++ {
-		c.Emit(sig, key.Field("test"))
+		c.Emit(context.Background(), sig, key.Field("test"))
 	}
 
 	// Shutdown should wait for all events to be processed
@@ -208,7 +209,7 @@ func TestWorkerNoListeners(_ *testing.T) {
 	key := NewStringKey("value")
 
 	// Should not panic or hang
-	c.Emit(sig, key.Field("test"))
+	c.Emit(context.Background(), sig, key.Field("test"))
 
 	time.Sleep(10 * time.Millisecond)
 }
@@ -221,7 +222,7 @@ func TestWorkerOnlyCreatedWithListeners(t *testing.T) {
 	key := NewStringKey("value")
 
 	// Emit without any listeners - worker should NOT be created
-	c.Emit(sig, key.Field("test"))
+	c.Emit(context.Background(), sig, key.Field("test"))
 
 	c.mu.RLock()
 	_, workerExists := c.workers[sig]
@@ -232,10 +233,10 @@ func TestWorkerOnlyCreatedWithListeners(t *testing.T) {
 	}
 
 	// Now add a listener
-	c.Hook(sig, func(_ *Event) {})
+	c.Hook(sig, func(_ context.Context, _ *Event) {})
 
 	// Emit with listener - worker SHOULD be created
-	c.Emit(sig, key.Field("test"))
+	c.Emit(context.Background(), sig, key.Field("test"))
 
 	c.mu.RLock()
 	_, workerExists = c.workers[sig]
@@ -253,7 +254,7 @@ func TestWorkerNotCreatedOnHookOnly(t *testing.T) {
 	sig := Signal("test.hook.only")
 
 	// Just hook a listener without emitting
-	c.Hook(sig, func(_ *Event) {})
+	c.Hook(sig, func(_ context.Context, _ *Event) {})
 
 	c.mu.RLock()
 	_, workerExists := c.workers[sig]
@@ -272,10 +273,10 @@ func TestWorkerCreatedWithObserver(t *testing.T) {
 	key := NewStringKey("value")
 
 	// Create an observer
-	c.Observe(func(_ *Event) {})
+	c.Observe(func(_ context.Context, _ *Event) {})
 
 	// Emit - observer should cause listener to be attached, and worker created
-	c.Emit(sig, key.Field("test"))
+	c.Emit(context.Background(), sig, key.Field("test"))
 
 	c.mu.RLock()
 	_, workerExists := c.workers[sig]
@@ -299,23 +300,23 @@ func TestWorkerMultipleSignalsIsolated(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(3)
 
-	c.Hook(sig1, func(_ *Event) {
+	c.Hook(sig1, func(_ context.Context, _ *Event) {
 		mu.Lock()
 		count1++
 		mu.Unlock()
 		wg.Done()
 	})
 
-	c.Hook(sig2, func(_ *Event) {
+	c.Hook(sig2, func(_ context.Context, _ *Event) {
 		mu.Lock()
 		count2++
 		mu.Unlock()
 		wg.Done()
 	})
 
-	c.Emit(sig1, key.Field("first"))
-	c.Emit(sig1, key.Field("second"))
-	c.Emit(sig2, key.Field("third"))
+	c.Emit(context.Background(), sig1, key.Field("first"))
+	c.Emit(context.Background(), sig1, key.Field("second"))
+	c.Emit(context.Background(), sig2, key.Field("third"))
 
 	wg.Wait()
 
@@ -327,5 +328,184 @@ func TestWorkerMultipleSignalsIsolated(t *testing.T) {
 	}
 	if count2 != 1 {
 		t.Errorf("sig2: expected 1 event, got %d", count2)
+	}
+}
+
+func TestWorkerContextCancellation(t *testing.T) {
+	c := New()
+	defer c.Shutdown()
+
+	sig := Signal("test.worker.cancel")
+	key := NewStringKey("value")
+
+	var received int
+	var mu sync.Mutex
+
+	c.Hook(sig, func(_ context.Context, _ *Event) {
+		mu.Lock()
+		received++
+		mu.Unlock()
+	})
+
+	// Emit with already-canceled context
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	c.Emit(ctx, sig, key.Field("test"))
+
+	time.Sleep(50 * time.Millisecond)
+
+	mu.Lock()
+	count := received
+	mu.Unlock()
+
+	if count != 0 {
+		t.Errorf("expected 0 events with canceled context, got %d", count)
+	}
+}
+
+func TestWorkerContextTimeout(t *testing.T) {
+	c := New(WithBufferSize(1))
+	defer c.Shutdown()
+
+	sig := Signal("test.worker.timeout")
+	key := NewIntKey("value")
+
+	block := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	c.Hook(sig, func(_ context.Context, _ *Event) {
+		wg.Done()
+		<-block
+	})
+
+	// Fill buffer
+	c.Emit(context.Background(), sig, key.Field(1))
+	wg.Wait()
+
+	c.Emit(context.Background(), sig, key.Field(2))
+
+	// This should timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	c.Emit(ctx, sig, key.Field(3))
+	elapsed := time.Since(start)
+
+	if elapsed > 200*time.Millisecond {
+		t.Errorf("Emit blocked too long: %v", elapsed)
+	}
+
+	close(block)
+}
+
+func TestWorkerSkipsCancelledEvents(t *testing.T) {
+	c := New(WithBufferSize(10))
+	defer c.Shutdown()
+
+	sig := Signal("test.worker.skip")
+	key := NewStringKey("value")
+
+	var received int
+	var mu sync.Mutex
+	firstEvent := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	c.Hook(sig, func(_ context.Context, _ *Event) {
+		mu.Lock()
+		received++
+		mu.Unlock()
+		wg.Done()
+		<-firstEvent
+	})
+
+	// Emit first event with valid context
+	c.Emit(context.Background(), sig, key.Field("first"))
+	wg.Wait()
+
+	// Emit second event with cancellable context
+	ctx, cancel := context.WithCancel(context.Background())
+	c.Emit(ctx, sig, key.Field("second"))
+
+	// Cancel context while event is queued
+	time.Sleep(10 * time.Millisecond)
+	cancel()
+
+	// Release first event (second should be skipped due to canceled context)
+	close(firstEvent)
+
+	// Give time for processing
+	time.Sleep(50 * time.Millisecond)
+
+	mu.Lock()
+	count := received
+	mu.Unlock()
+
+	// Should only have processed first event
+	if count != 1 {
+		t.Errorf("expected 1 event processed, got %d", count)
+	}
+}
+
+func TestEmitBlockedOnShutdown(t *testing.T) {
+	// Test that Emit unblocks when Shutdown is called while waiting on full buffer
+	c := New(WithBufferSize(1))
+
+	sig := Signal("test.shutdown.blocked")
+	key := NewStringKey("value")
+
+	block := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	c.Hook(sig, func(_ context.Context, _ *Event) {
+		wg.Done()
+		<-block // Block listener to keep worker busy
+	})
+
+	// Emit first event - will be received by listener and block
+	c.Emit(context.Background(), sig, key.Field("first"))
+	wg.Wait() // Wait for listener to receive first event
+
+	// Emit second event - fills the buffer
+	c.Emit(context.Background(), sig, key.Field("second"))
+
+	// Start goroutine to emit third event - will block on full buffer
+	emitDone := make(chan struct{})
+	go func() {
+		c.Emit(context.Background(), sig, key.Field("third"))
+		close(emitDone)
+	}()
+
+	// Give goroutine time to block on the send
+	time.Sleep(50 * time.Millisecond)
+
+	// Call Shutdown while Emit is blocked - should unblock via c.shutdown case
+	shutdownDone := make(chan struct{})
+	go func() {
+		c.Shutdown()
+		close(shutdownDone)
+	}()
+
+	// Emit should return quickly after shutdown fires
+	select {
+	case <-emitDone:
+		// Success - Emit unblocked
+	case <-time.After(time.Second):
+		t.Fatal("Emit did not unblock on Shutdown")
+	}
+
+	// Unblock listener so shutdown can complete
+	close(block)
+
+	// Shutdown should complete
+	select {
+	case <-shutdownDone:
+		// Success
+	case <-time.After(time.Second):
+		t.Fatal("Shutdown did not complete")
 	}
 }

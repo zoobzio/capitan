@@ -19,15 +19,15 @@ At its core, capitan provides just three operations:
 
 ```go
 // Emit an event
-capitan.Emit(signal, fields...)
+capitan.Emit(ctx, signal, fields...)
 
 // Hook a listener
-listener := capitan.Hook(signal, func(e *capitan.Event) {
+listener := capitan.Hook(signal, func(ctx context.Context, e *capitan.Event) {
     // Handle event
 })
 
 // Observe all signals
-observer := capitan.Observe(func(e *capitan.Event) {
+observer := capitan.Observe(func(ctx context.Context, e *capitan.Event) {
     // Handle any event
 })
 ```
@@ -40,6 +40,7 @@ observer := capitan.Observe(func(e *capitan.Event) {
 package main
 
 import (
+    "context"
     "github.com/zoobzio/capitan"
 )
 
@@ -50,14 +51,14 @@ func main() {
     total := capitan.NewFloat64Key("total")
 
     // Hook a listener
-    capitan.Hook(orderCreated, func(e *capitan.Event) {
+    capitan.Hook(orderCreated, func(ctx context.Context, e *capitan.Event) {
         id, _ := orderID.From(e)
         amount, _ := total.From(e)
         // Process order...
     })
 
     // Emit an event (async with backpressure)
-    capitan.Emit(orderCreated,
+    capitan.Emit(context.Background(), orderCreated,
         orderID.Field("ORDER-123"),
         total.Field(99.99),
     )
@@ -75,6 +76,7 @@ func main() {
 - **Lazy**: Workers created only when needed
 - **Isolated**: Slow listeners don't affect other signals
 - **Panic-safe**: Listener panics recovered, system stays running
+- **Configurable**: Optional buffer sizes, panic handlers, and runtime metrics
 - **Clean**: No schemas, no boilerplate, no registration ceremony
 - **Testable**: Every component independently testable
 
@@ -104,7 +106,7 @@ active := capitan.NewBoolKey("active")
 
 **Fields** carry typed values:
 ```go
-capitan.Emit(userLogin,
+capitan.Emit(context.Background(), userLogin,
     userID.Field("user_123"),
     count.Field(5),
 )
@@ -112,15 +114,15 @@ capitan.Emit(userLogin,
 
 **Listeners** handle events:
 ```go
-listener := capitan.Hook(userLogin, func(e *capitan.Event) {
-    uid := userID.From(e)
+listener := capitan.Hook(userLogin, func(ctx context.Context, e *capitan.Event) {
+    uid, _ := userID.From(e)
     // Handle login...
 })
 ```
 
 **Observers** watch all signals (dynamic):
 ```go
-observer := capitan.Observe(func(e *capitan.Event) {
+observer := capitan.Observe(func(ctx context.Context, e *capitan.Event) {
     // Log all events
 })
 ```
@@ -163,7 +165,7 @@ var (
 signal := capitan.Signal(fmt.Sprintf("user.%s.login", userID))
 
 // GOOD: Use fields to carry dynamic data
-capitan.Emit(UserLogin, userID.Field(id))
+capitan.Emit(context.Background(), UserLogin, userID.Field(id))
 ```
 
 Use fields to carry variable data, not signal names. Think of signals as event _types_, not event _instances_.
@@ -176,6 +178,7 @@ Here's a realistic example showing how capitan handles application events:
 package main
 
 import (
+    "context"
     "fmt"
     "log"
     "time"
@@ -198,14 +201,14 @@ var (
 
 func main() {
     // Setup logging observer for all events
-    capitan.Observe(func(e *capitan.Event) {
+    capitan.Observe(func(ctx context.Context, e *capitan.Event) {
         log.Printf("[EVENT] %s at %s",
             e.Signal(),
             e.Timestamp().Format(time.RFC3339))
     })
 
     // Hook order created handler
-    capitan.Hook(orderCreated, func(e *capitan.Event) {
+    capitan.Hook(orderCreated, func(ctx context.Context, e *capitan.Event) {
         id, _ := orderID.From(e)
         amount, _ := total.From(e)
 
@@ -217,7 +220,7 @@ func main() {
     })
 
     // Hook order shipped handler
-    capitan.Hook(orderShipped, func(e *capitan.Event) {
+    capitan.Hook(orderShipped, func(ctx context.Context, e *capitan.Event) {
         id, _ := orderID.From(e)
         user, _ := userID.From(e)
 
@@ -226,13 +229,13 @@ func main() {
     })
 
     // Emit events (async with backpressure)
-    capitan.Emit(orderCreated,
+    capitan.Emit(context.Background(), orderCreated,
         orderID.Field("ORDER-123"),
         userID.Field("user_456"),
         total.Field(99.99),
     )
 
-    capitan.Emit(orderShipped,
+    capitan.Emit(context.Background(), orderShipped,
         orderID.Field("ORDER-123"),
         userID.Field("user_456"),
     )
@@ -261,8 +264,8 @@ func main() {
 **Cross-Signal Independence**: No ordering guarantees between different signals. Workers operate concurrently and independently.
 
 ```go
-Emit("order.created", orderID.Field("123"))
-Emit("email.sent", orderID.Field("123"))
+Emit(ctx, "order.created", orderID.Field("123"))
+Emit(ctx, "email.sent", orderID.Field("123"))
 Shutdown()
 
 // order.created's listeners might complete before OR after email.sent's listeners
@@ -273,15 +276,60 @@ Shutdown()
 
 **Backpressure**: Each signal has a buffered queue (16 events by default). If the queue fills, `Emit()` blocks until space is available. This provides natural backpressure - slow listeners will slow down emitters for that signal only, preventing unbounded memory growth. Other signals are unaffected.
 
-## Multiple Instances
+## Configuration
 
-While the module-level API uses a default singleton, you can create isolated instances:
+Capitan supports optional configuration for buffer sizes and panic handling.
+
+**Configure the default instance** (must be called before first use):
 
 ```go
+func main() {
+    capitan.Configure(
+        capitan.WithBufferSize(128),
+        capitan.WithPanicHandler(func(sig capitan.Signal, recovered any) {
+            log.Printf("Listener panic on %s: %v", sig, recovered)
+        }),
+    )
+
+    // Now use module-level API with custom config
+    capitan.Hook(signal, handler)
+    capitan.Emit(ctx, signal, fields...)
+}
+```
+
+**Available options:**
+
+- `WithBufferSize(n int)` - Sets event queue buffer size per signal (default: 16). Larger buffers reduce backpressure but increase memory usage.
+- `WithPanicHandler(func(Signal, any))` - Called when a listener panics. By default, panics are recovered silently to prevent system crashes.
+
+**Runtime metrics:**
+
+```go
+stats := capitan.Stats()
+fmt.Printf("Active workers: %d\n", stats.ActiveWorkers)
+fmt.Printf("Queue depths: %v\n", stats.QueueDepths)
+fmt.Printf("Listener counts: %v\n", stats.ListenerCounts)
+```
+
+For custom instances, use `c.Stats()`.
+
+## Multiple Instances
+
+While the module-level API uses a default singleton, you can create isolated instances with custom configuration:
+
+```go
+// Default configuration
 c := capitan.New()
 
+// Custom configuration
+c := capitan.New(
+    capitan.WithBufferSize(256),
+    capitan.WithPanicHandler(logPanic),
+)
+
 c.Hook(signal, handler)
-c.Emit(signal, fields...)
+c.Emit(ctx, signal, fields...)
+c.Stats() // Get metrics for this instance
 c.Shutdown()
 ```
 
@@ -328,7 +376,7 @@ if gf, ok := field.(capitan.GenericField[string]); ok {
 
 ### Extending with Custom Types
 
-You can extend capitan with your own field types for structs or custom types:
+You can extend capitan with your own field types for structs or custom types using `NewKey[T]`:
 
 ```go
 // Define your custom type
@@ -338,56 +386,22 @@ type OrderInfo struct {
     Items  int
 }
 
-// Create a custom variant (use a unique string to avoid collisions)
-const VariantOrderInfo capitan.Variant = "myapp.OrderInfo"
+// Create a typed key (one line!)
+var orderKey = capitan.NewKey[OrderInfo]("order", "myapp.OrderInfo")
 
-// Create a Key implementation
-type OrderInfoKey struct {
-    name string
-}
-
-func NewOrderInfoKey(name string) OrderInfoKey {
-    return OrderInfoKey{name: name}
-}
-
-func (k OrderInfoKey) Name() string { return k.name }
-func (k OrderInfoKey) Variant() capitan.Variant { return VariantOrderInfo }
-
-// Create fields using GenericField
-func (k OrderInfoKey) Field(value OrderInfo) capitan.Field {
-    return capitan.GenericField[OrderInfo]{
-        key:     k,
-        value:   value,
-        variant: k.Variant(),
-    }
-}
-
-// Extract typed values from events
-func (k OrderInfoKey) From(e *capitan.Event) (OrderInfo, bool) {
-    f := e.Get(k)
-    if f == nil {
-        return OrderInfo{}, false
-    }
-    if gf, ok := f.(capitan.GenericField[OrderInfo]); ok {
-        return gf.Get(), true
-    }
-    return OrderInfo{}, false
-}
-
-// Use it like built-in types
+// Use it exactly like built-in types
 func main() {
     sig := capitan.Signal("order.processed")
-    orderKey := NewOrderInfoKey("order")
 
-    capitan.Hook(sig, func(e *capitan.Event) {
-        order, ok := orderKey.From(e)
+    capitan.Hook(sig, func(ctx context.Context, e *capitan.Event) {
+        order, ok := orderKey.From(e)  // Type-safe extraction
         if ok {
             fmt.Printf("Order %s: $%.2f (%d items)\n",
                 order.ID, order.Total, order.Items)
         }
     })
 
-    capitan.Emit(sig, orderKey.Field(OrderInfo{
+    capitan.Emit(context.Background(), sig, orderKey.Field(OrderInfo{
         ID:    "ORDER-123",
         Total: 99.99,
         Items: 3,
@@ -397,7 +411,9 @@ func main() {
 }
 ```
 
-**Variant naming**: Use namespaced strings to avoid collisions (e.g., `"github.com/yourorg/yourpkg.TypeName"`).
+**Variant naming**: Use namespaced strings to avoid collisions (e.g., `"myapp.OrderInfo"` or `"github.com/yourorg/yourpkg.TypeName"`).
+
+**Note**: The built-in types (`StringKey`, `IntKey`, `Float64Key`, `BoolKey`) are just aliases of `GenericKey[T]` with predefined variants. You can use `NewKey[T]` for any type.
 
 ## Event Access
 

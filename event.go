@@ -1,6 +1,7 @@
 package capitan
 
 import (
+	"context"
 	"sync"
 	"time"
 )
@@ -22,6 +23,9 @@ type Event struct {
 	// timestamp records when the event was created.
 	timestamp time.Time
 
+	// ctx is the context passed at emission time, used for cancellation and request-scoped values.
+	ctx context.Context
+
 	// fields contains the event's data as key-value pairs, keyed by Key.Name().
 	fields map[string]Field
 }
@@ -36,12 +40,19 @@ func (e *Event) Timestamp() time.Time {
 	return e.timestamp
 }
 
-// newEvent creates an Event with the given signal and fields.
+// Context returns the context passed at emission time.
+// Used for cancellation checks, timeouts, and request-scoped values.
+func (e *Event) Context() context.Context {
+	return e.ctx
+}
+
+// newEvent creates an Event with the given context, signal and fields.
 // Events are pooled internally to reduce allocations.
-func newEvent(signal Signal, fields ...Field) *Event {
+func newEvent(ctx context.Context, signal Signal, fields ...Field) *Event {
 	e := eventPool.Get().(*Event) //nolint:errcheck // Pool always returns *Event
 	e.signal = signal
 	e.timestamp = time.Now()
+	e.ctx = ctx
 
 	// Clear existing fields
 	for k := range e.fields {

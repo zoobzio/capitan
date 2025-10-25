@@ -1,12 +1,15 @@
 package capitan
 
 import (
+	"context"
 	"sync"
 )
 
 var (
 	defaultCapitan *Capitan
 	defaultOnce    sync.Once
+	defaultOptions []Option
+	defaultOptMu   sync.Mutex
 )
 
 // Capitan is an event coordination system.
@@ -18,21 +21,60 @@ type Capitan struct {
 	shutdownOnce sync.Once
 	wg           sync.WaitGroup
 	mu           sync.RWMutex
+	bufferSize   int
+	panicHandler PanicHandler
 }
 
-// New creates a new Capitan instance.
-func New() *Capitan {
-	return &Capitan{
-		registry: make(map[Signal][]*Listener),
-		workers:  make(map[Signal]*workerState),
-		shutdown: make(chan struct{}),
+// New creates a new Capitan instance with optional configuration.
+// If no options are provided, sensible defaults are used (bufferSize=16, no panic handler).
+func New(opts ...Option) *Capitan {
+	c := &Capitan{
+		registry:   make(map[Signal][]*Listener),
+		workers:    make(map[Signal]*workerState),
+		shutdown:   make(chan struct{}),
+		bufferSize: 16, // default buffer size
+	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
+}
+
+// Configure sets options for the default Capitan instance.
+// Must be called before any module-level functions (Hook, Emit, Observe, Shutdown).
+// Subsequent calls have no effect once the default instance is created.
+func Configure(opts ...Option) {
+	defaultOptMu.Lock()
+	defaultOptions = opts
+	defaultOptMu.Unlock()
+}
+
+// WithBufferSize sets the event queue buffer size for each signal's worker.
+// Default is 16. Larger buffers reduce backpressure but increase memory usage.
+func WithBufferSize(size int) Option {
+	return func(c *Capitan) {
+		if size > 0 {
+			c.bufferSize = size
+		}
+	}
+}
+
+// WithPanicHandler sets a callback to be invoked when a listener panics.
+// The handler receives the signal and the recovered panic value.
+// By default, panics are recovered silently to prevent system crashes.
+func WithPanicHandler(handler PanicHandler) Option {
+	return func(c *Capitan) {
+		c.panicHandler = handler
 	}
 }
 
 // defaultInstance returns the default Capitan instance, creating it if necessary.
 func defaultInstance() *Capitan {
 	defaultOnce.Do(func() {
-		defaultCapitan = New()
+		defaultOptMu.Lock()
+		opts := defaultOptions
+		defaultOptMu.Unlock()
+		defaultCapitan = New(opts...)
 	})
 	return defaultCapitan
 }
@@ -126,8 +168,8 @@ func (c *Capitan) Observe(callback EventCallback, signals ...Signal) *Observer {
 }
 
 // Emit dispatches an event on the default instance.
-func Emit(signal Signal, fields ...Field) {
-	defaultInstance().Emit(signal, fields...)
+func Emit(ctx context.Context, signal Signal, fields ...Field) {
+	defaultInstance().Emit(ctx, signal, fields...)
 }
 
 // attachObservers attaches all active observers to a signal.
@@ -182,6 +224,29 @@ func (c *Capitan) unregister(listener *Listener) {
 			delete(c.workers, listener.signal)
 		}
 	}
+}
+
+// Stats returns runtime metrics for the Capitan instance.
+// Provides visibility into active workers, queue depths, and listener counts.
+func (c *Capitan) Stats() Stats {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	stats := Stats{
+		ActiveWorkers:  len(c.workers),
+		QueueDepths:    make(map[Signal]int, len(c.workers)),
+		ListenerCounts: make(map[Signal]int, len(c.registry)),
+	}
+
+	for signal, worker := range c.workers {
+		stats.QueueDepths[signal] = len(worker.events)
+	}
+
+	for signal, listeners := range c.registry {
+		stats.ListenerCounts[signal] = len(listeners)
+	}
+
+	return stats
 }
 
 // Shutdown gracefully stops all worker goroutines on the default instance.

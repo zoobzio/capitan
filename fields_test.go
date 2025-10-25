@@ -1,6 +1,7 @@
 package capitan
 
 import (
+	"context"
 	"sync"
 	"testing"
 )
@@ -175,7 +176,7 @@ func TestAllFieldTypes(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	c.Hook(sig, func(e *Event) {
+	c.Hook(sig, func(_ context.Context, e *Event) {
 		receivedStr, _ = strKey.From(e)
 		receivedInt, _ = intKey.From(e)
 		receivedFloat, _ = floatKey.From(e)
@@ -183,7 +184,7 @@ func TestAllFieldTypes(t *testing.T) {
 		wg.Done()
 	})
 
-	c.Emit(sig,
+	c.Emit(context.Background(), sig,
 		strKey.Field("hello"),
 		intKey.Field(42),
 		floatKey.Field(3.14),
@@ -220,7 +221,7 @@ func TestFromMethods(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	c.Hook(sig, func(e *Event) {
+	c.Hook(sig, func(_ context.Context, e *Event) {
 		defer wg.Done()
 
 		// Test From() methods
@@ -259,7 +260,7 @@ func TestFromMethods(t *testing.T) {
 		}
 	})
 
-	c.Emit(sig,
+	c.Emit(context.Background(), sig,
 		strKey.Field("test"),
 		intKey.Field(100),
 		floatKey.Field(2.5),
@@ -328,7 +329,7 @@ func TestCustomStructField(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	c.Hook(sig, func(e *Event) {
+	c.Hook(sig, func(_ context.Context, e *Event) {
 		order, ok := orderKey.From(e)
 		if !ok {
 			t.Error("failed to extract order from event")
@@ -337,7 +338,7 @@ func TestCustomStructField(t *testing.T) {
 		wg.Done()
 	})
 
-	c.Emit(sig, orderKey.Field(expectedOrder))
+	c.Emit(context.Background(), sig, orderKey.Field(expectedOrder))
 
 	wg.Wait()
 
@@ -395,4 +396,86 @@ func TestCustomStructFieldTypeAssertion(t *testing.T) {
 	if receivedOrder.Active != expectedOrder.Active {
 		t.Errorf("Active: expected %v, got %v", expectedOrder.Active, receivedOrder.Active)
 	}
+}
+
+func TestNewKeyGeneric(t *testing.T) {
+	// Test NewKey[T] with custom struct type
+	type CustomData struct {
+		Value string
+		Count int
+	}
+
+	customKey := NewKey[CustomData]("custom", "test.CustomData")
+
+	if customKey.Name() != "custom" {
+		t.Errorf("expected name %q, got %q", "custom", customKey.Name())
+	}
+
+	if customKey.Variant() != "test.CustomData" {
+		t.Errorf("expected variant %q, got %v", "test.CustomData", customKey.Variant())
+	}
+
+	// Test creating field and extracting value
+	c := New()
+	defer c.Shutdown()
+
+	sig := Signal("test.newkey")
+	expectedData := CustomData{Value: "test", Count: 42}
+
+	var received CustomData
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	c.Hook(sig, func(_ context.Context, e *Event) {
+		data, ok := customKey.From(e)
+		if !ok {
+			t.Error("failed to extract custom data from event")
+		}
+		received = data
+		wg.Done()
+	})
+
+	c.Emit(context.Background(), sig, customKey.Field(expectedData))
+
+	wg.Wait()
+
+	if received.Value != expectedData.Value {
+		t.Errorf("Value: expected %q, got %q", expectedData.Value, received.Value)
+	}
+	if received.Count != expectedData.Count {
+		t.Errorf("Count: expected %d, got %d", expectedData.Count, received.Count)
+	}
+}
+
+func TestFromTypeMismatch(t *testing.T) {
+	// Test that From() returns false when types don't match
+	c := New()
+	defer c.Shutdown()
+
+	sig := Signal("test.mismatch")
+	strKey := NewStringKey("data")
+	intKey := NewIntKey("data") // Same name, different type
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	c.Hook(sig, func(_ context.Context, e *Event) {
+		defer wg.Done()
+
+		// Event has string field named "data"
+		str, ok := strKey.From(e)
+		if !ok || str != "hello" {
+			t.Errorf("StringKey.From: expected %q (ok=true), got %q (ok=%v)", "hello", str, ok)
+		}
+
+		// Trying to extract as int with same name should fail
+		intVal, ok := intKey.From(e)
+		if ok || intVal != 0 {
+			t.Errorf("IntKey.From (type mismatch): expected 0 (ok=false), got %d (ok=%v)", intVal, ok)
+		}
+	})
+
+	c.Emit(context.Background(), sig, strKey.Field("hello"))
+
+	wg.Wait()
 }
