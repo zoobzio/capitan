@@ -1,0 +1,58 @@
+// Package capitan provides type-safe event coordination for Go with zero dependencies.
+//
+// At its core, capitan offers three operations: Emit events with typed fields,
+// Hook listeners to specific signals, and Observe all signals. Events are processed
+// asynchronously with per-signal worker goroutines for isolation and performance.
+//
+// Quick example:
+//
+//	sig := capitan.Signal("order.created")
+//	orderID := capitan.NewStringKey("order_id")
+//
+//	capitan.Hook(sig, func(e *capitan.Event) {
+//	    id := e.Get(orderID).(capitan.StringField).String()
+//	    // Process order...
+//	})
+//
+//	capitan.Emit(sig, orderID.Field("ORDER-123"))
+//	capitan.Shutdown() // Drain pending events
+//
+// See https://github.com/zoobzio/capitan for full documentation.
+package capitan
+
+// Signal represents an event type identifier used for routing events to listeners.
+type Signal string
+
+// Key represents a typed semantic identifier for a field.
+// Each Key implementation is bound to a specific Variant, ensuring type safety.
+type Key interface {
+	// Name returns the semantic identifier for this key.
+	Name() string
+
+	// Variant returns the type constraint for this key.
+	Variant() Variant
+}
+
+// Variant is a discriminator for the Field interface implementation type.
+type Variant int
+
+const (
+	VariantString Variant = iota
+	VariantInt
+	VariantFloat64
+	VariantBool
+)
+
+// Field represents a typed value with semantic meaning in an Event.
+// Library authors can implement custom Field types while maintaining type safety.
+// Use type assertions to access concrete field types and their typed accessor methods.
+type Field interface {
+	// Variant returns the discriminator for this field's concrete type.
+	Variant() Variant
+
+	// Key returns the semantic identifier for this field.
+	Key() Key
+
+	// Value returns the underlying value as any.
+	Value() any
+}
