@@ -14,23 +14,34 @@ var eventPool = sync.Pool{
 }
 
 // Event represents a signal emission with typed fields.
+// Events are immutable after creation - all fields are read-only.
 type Event struct {
-	// Signal identifies the event type for routing to listeners.
-	Signal Signal
+	// signal identifies the event type for routing to listeners.
+	signal Signal
 
-	// Timestamp records when the event was created.
-	Timestamp time.Time
+	// timestamp records when the event was created.
+	timestamp time.Time
 
 	// fields contains the event's data as key-value pairs, keyed by Key.Name().
 	fields map[string]Field
+}
+
+// Signal returns the event's signal identifier.
+func (e *Event) Signal() Signal {
+	return e.signal
+}
+
+// Timestamp returns when the event was created.
+func (e *Event) Timestamp() time.Time {
+	return e.timestamp
 }
 
 // newEvent creates an Event with the given signal and fields.
 // Events are pooled internally to reduce allocations.
 func newEvent(signal Signal, fields ...Field) *Event {
 	e := eventPool.Get().(*Event) //nolint:errcheck // Pool always returns *Event
-	e.Signal = signal
-	e.Timestamp = time.Now()
+	e.signal = signal
+	e.timestamp = time.Now()
 
 	// Clear existing fields
 	for k := range e.fields {

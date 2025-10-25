@@ -10,7 +10,7 @@
 //	orderID := capitan.NewStringKey("order_id")
 //
 //	capitan.Hook(sig, func(e *capitan.Event) {
-//	    id := e.Get(orderID).(capitan.StringField).String()
+//	    id := orderID.From(e)
 //	    // Process order...
 //	})
 //
@@ -55,4 +55,10 @@ type Field interface {
 
 	// Value returns the underlying value as any.
 	Value() any
+}
+
+// workerState manages the lifecycle of a signal's worker goroutine.
+type workerState struct {
+	events chan *Event   // buffered channel for queuing events
+	done   chan struct{} // signals worker to drain and exit
 }

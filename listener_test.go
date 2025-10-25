@@ -186,7 +186,7 @@ func TestObserverSnapshotBehavior(_ *testing.T) {
 
 	// Observer should only see sig1 (snapshot at creation time)
 	observer := c.Observe(func(e *Event) {
-		if e.Signal == sig1 {
+		if e.Signal() == sig1 {
 			wg.Done()
 		}
 	})
@@ -235,7 +235,7 @@ func TestObserverReceivesAllExistingSignals(t *testing.T) {
 
 	c.Observe(func(e *Event) {
 		mu.Lock()
-		received[e.Signal] = true
+		received[e.Signal()] = true
 		mu.Unlock()
 		wg.Done()
 	})

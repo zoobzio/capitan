@@ -11,7 +11,7 @@
 
 Type-safe event coordination for Go with zero dependencies.
 
-Emit events with typed fields, hook listeners, and let capitan handle the rest.
+Emit events with typed fields, hook listeners, and let capitan handle the rest with async processing and backpressure.
 
 ## The Power of Simplicity
 
@@ -51,12 +51,12 @@ func main() {
 
     // Hook a listener
     capitan.Hook(orderCreated, func(e *capitan.Event) {
-        id := e.Get(orderID).(capitan.StringField).String()
-        amount := e.Get(total).(capitan.Float64Field).Float64()
+        id, _ := orderID.From(e)
+        amount, _ := total.From(e)
         // Process order...
     })
 
-    // Emit an event (fire-and-forget, async)
+    // Emit an event (async with backpressure)
     capitan.Emit(orderCreated,
         orderID.Field("ORDER-123"),
         total.Field(99.99),
@@ -71,7 +71,7 @@ func main() {
 
 - **Type-safe**: Typed fields with compile-time safety
 - **Zero dependencies**: Just standard library
-- **Async by default**: Fire-and-forget emission with per-signal worker goroutines
+- **Async by default**: Non-blocking emission with per-signal worker goroutines and backpressure
 - **Lazy**: Workers created only when needed
 - **Isolated**: Slow listeners don't affect other signals
 - **Panic-safe**: Listener panics recovered, system stays running
@@ -113,17 +113,60 @@ capitan.Emit(userLogin,
 **Listeners** handle events:
 ```go
 listener := capitan.Hook(userLogin, func(e *capitan.Event) {
-    uid := e.Get(userID).(capitan.StringField).String()
+    uid := userID.From(e)
     // Handle login...
 })
 ```
 
-**Observers** watch all signals (snapshot at creation):
+**Observers** watch all signals (dynamic):
 ```go
 observer := capitan.Observe(func(e *capitan.Event) {
     // Log all events
 })
 ```
+
+Observers receive events from both existing signals and any signals created after the observer is registered. This is compatible with lazy signal initialization - observers automatically attach to workers as they're created.
+
+### Best Practice: Define Signals and Keys as Constants
+
+**Always define signals and keys as package-level constants:**
+
+```go
+// Define signals at package level
+const (
+    UserLogin    = capitan.Signal("user.login")
+    UserLogout   = capitan.Signal("user.logout")
+    OrderCreated = capitan.Signal("order.created")
+)
+
+// Define keys at package level
+var (
+    userID   = capitan.NewStringKey("user_id")
+    orderID  = capitan.NewStringKey("order_id")
+    total    = capitan.NewFloat64Key("total")
+)
+```
+
+**Why?**
+
+1. **Bounded memory** - Capitan maintains internal registries keyed by signal. A fixed set of signals means predictable memory usage. Dynamic signal creation (e.g., per-user, per-request) will cause unbounded registry growth.
+
+2. **Worker lifecycle** - Each signal gets its own worker goroutine. Dynamic signals create goroutines that persist until explicit cleanup, leading to goroutine leaks in long-running systems.
+
+3. **Predictable behavior** - Const signals make event flow analyzable at compile time. Observers and hooks can be reasoned about statically.
+
+4. **Performance** - Internal lookups are optimized for a stable signal set. Dynamic signals bypass lazy initialization benefits.
+
+**Avoid dynamic signals:**
+```go
+// BAD: Creates new signal per user
+signal := capitan.Signal(fmt.Sprintf("user.%s.login", userID))
+
+// GOOD: Use fields to carry dynamic data
+capitan.Emit(UserLogin, userID.Field(id))
+```
+
+Use fields to carry variable data, not signal names. Think of signals as event _types_, not event _instances_.
 
 ## Real-World Example
 
@@ -139,8 +182,8 @@ import (
     "github.com/zoobzio/capitan"
 )
 
-// Define signals
-var (
+// Define signals as constants
+const (
     orderCreated = capitan.Signal("order.created")
     orderShipped = capitan.Signal("order.shipped")
 )
@@ -157,14 +200,14 @@ func main() {
     // Setup logging observer for all events
     capitan.Observe(func(e *capitan.Event) {
         log.Printf("[EVENT] %s at %s",
-            e.Signal,
-            e.Timestamp.Format(time.RFC3339))
+            e.Signal(),
+            e.Timestamp().Format(time.RFC3339))
     })
 
     // Hook order created handler
     capitan.Hook(orderCreated, func(e *capitan.Event) {
-        id := e.Get(orderID).(capitan.StringField).String()
-        amount := e.Get(total).(capitan.Float64Field).Float64()
+        id, _ := orderID.From(e)
+        amount, _ := total.From(e)
 
         // Send confirmation email
         fmt.Printf("📧 Sending confirmation for order %s (%.2f)\n", id, amount)
@@ -175,14 +218,14 @@ func main() {
 
     // Hook order shipped handler
     capitan.Hook(orderShipped, func(e *capitan.Event) {
-        id := e.Get(orderID).(capitan.StringField).String()
-        user := e.Get(userID).(capitan.StringField).String()
+        id, _ := orderID.From(e)
+        user, _ := userID.From(e)
 
         // Send shipping notification
         fmt.Printf("📦 Notifying user %s: order %s shipped\n", user, id)
     })
 
-    // Emit events (async, fire-and-forget)
+    // Emit events (async with backpressure)
     capitan.Emit(orderCreated,
         orderID.Field("ORDER-123"),
         userID.Field("user_456"),
@@ -210,6 +253,25 @@ func main() {
 **Event Pooling**: Events are pooled internally to reduce allocations. Events are returned to the pool after all listeners finish.
 
 **Shutdown**: `Shutdown()` closes all worker goroutines gracefully, processing remaining queued events before exit.
+
+## Concurrency & Ordering
+
+**Per-Signal Ordering**: Events emitted to the same signal are processed in emission order. Each signal's worker processes its queue sequentially.
+
+**Cross-Signal Independence**: No ordering guarantees between different signals. Workers operate concurrently and independently.
+
+```go
+Emit("order.created", orderID.Field("123"))
+Emit("email.sent", orderID.Field("123"))
+Shutdown()
+
+// order.created's listeners might complete before OR after email.sent's listeners
+// Each signal processes independently
+```
+
+**Shutdown Behavior**: `Shutdown()` waits for all workers to drain their queues, but workers complete independently. Events queued at shutdown time will be processed before exit.
+
+**Backpressure**: Each signal has a buffered queue (16 events by default). If the queue fills, `Emit()` blocks until space is available. This provides natural backpressure - slow listeners will slow down emitters for that signal only, preventing unbounded memory growth. Other signals are unaffected.
 
 ## Multiple Instances
 
@@ -248,7 +310,15 @@ Capitan supports four primitive field types:
 - `Float64Key` / `Float64Field` - float64 values
 - `BoolKey` / `BoolField` - bool values
 
-Access typed values via type assertion:
+Access typed values using the From() method:
+```go
+value, ok := key.From(e)  // Returns (value, ok) tuple
+if !ok {
+    // Field not present or wrong type
+}
+```
+
+Or via type assertion on fields:
 ```go
 field := e.Get(key)
 if sf, ok := field.(capitan.StringField); ok {
@@ -266,8 +336,8 @@ field := e.Get(key)
 fields := e.Fields() // Returns []Field
 
 // Access metadata
-signal := e.Signal       // Signal identifier
-timestamp := e.Timestamp // When event was created
+signal := e.Signal()       // Signal identifier
+timestamp := e.Timestamp() // When event was created
 ```
 
 ## Performance

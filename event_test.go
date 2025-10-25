@@ -106,8 +106,8 @@ func TestEventSignal(t *testing.T) {
 
 	event := newEvent(sig, key.Field("test"))
 
-	if event.Signal != sig {
-		t.Errorf("expected signal %q, got %q", sig, event.Signal)
+	if event.Signal() != sig {
+		t.Errorf("expected signal %q, got %q", sig, event.Signal())
 	}
 }
 
@@ -119,8 +119,8 @@ func TestEventTimestamp(t *testing.T) {
 	event := newEvent(sig, key.Field("test"))
 	after := time.Now()
 
-	if event.Timestamp.Before(before) || event.Timestamp.After(after) {
-		t.Errorf("timestamp %v not between %v and %v", event.Timestamp, before, after)
+	if event.Timestamp().Before(before) || event.Timestamp().After(after) {
+		t.Errorf("timestamp %v not between %v and %v", event.Timestamp(), before, after)
 	}
 }
 

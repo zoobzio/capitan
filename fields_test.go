@@ -176,10 +176,10 @@ func TestAllFieldTypes(t *testing.T) {
 	wg.Add(1)
 
 	c.Hook(sig, func(e *Event) {
-		receivedStr = e.Get(strKey).(StringField).String()
-		receivedInt = e.Get(intKey).(IntField).Int()
-		receivedFloat = e.Get(floatKey).(Float64Field).Float64()
-		receivedBool = e.Get(boolKey).(BoolField).Bool()
+		receivedStr, _ = strKey.From(e)
+		receivedInt, _ = intKey.From(e)
+		receivedFloat, _ = floatKey.From(e)
+		receivedBool, _ = boolKey.From(e)
 		wg.Done()
 	})
 
@@ -204,4 +204,67 @@ func TestAllFieldTypes(t *testing.T) {
 	if receivedBool != true {
 		t.Errorf("bool: expected %v, got %v", true, receivedBool)
 	}
+}
+
+func TestFromMethods(t *testing.T) {
+	c := New()
+	defer c.Shutdown()
+
+	sig := Signal("test.from")
+
+	strKey := NewStringKey("str")
+	intKey := NewIntKey("int")
+	floatKey := NewFloat64Key("float")
+	boolKey := NewBoolKey("bool")
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	c.Hook(sig, func(e *Event) {
+		defer wg.Done()
+
+		// Test From() methods
+		if got, ok := strKey.From(e); !ok || got != "test" {
+			t.Errorf("StringKey.From: expected %q (ok=true), got %q (ok=%v)", "test", got, ok)
+		}
+		if got, ok := intKey.From(e); !ok || got != 100 {
+			t.Errorf("IntKey.From: expected %d (ok=true), got %d (ok=%v)", 100, got, ok)
+		}
+		if got, ok := floatKey.From(e); !ok || got != 2.5 {
+			t.Errorf("Float64Key.From: expected %f (ok=true), got %f (ok=%v)", 2.5, got, ok)
+		}
+		if got, ok := boolKey.From(e); !ok || got != true {
+			t.Errorf("BoolKey.From: expected %v (ok=true), got %v (ok=%v)", true, got, ok)
+		}
+
+		// Test From() on missing fields (should return zero values and ok=false)
+		missingStr := NewStringKey("missing_str")
+		if got, ok := missingStr.From(e); ok || got != "" {
+			t.Errorf("StringKey.From (missing): expected %q (ok=false), got %q (ok=%v)", "", got, ok)
+		}
+
+		missingInt := NewIntKey("missing_int")
+		if got, ok := missingInt.From(e); ok || got != 0 {
+			t.Errorf("IntKey.From (missing): expected %d (ok=false), got %d (ok=%v)", 0, got, ok)
+		}
+
+		missingFloat := NewFloat64Key("missing_float")
+		if got, ok := missingFloat.From(e); ok || got != 0 {
+			t.Errorf("Float64Key.From (missing): expected %f (ok=false), got %f (ok=%v)", 0.0, got, ok)
+		}
+
+		missingBool := NewBoolKey("missing_bool")
+		if got, ok := missingBool.From(e); ok || got != false {
+			t.Errorf("BoolKey.From (missing): expected %v (ok=false), got %v (ok=%v)", false, got, ok)
+		}
+	})
+
+	c.Emit(sig,
+		strKey.Field("test"),
+		intKey.Field(100),
+		floatKey.Field(2.5),
+		boolKey.Field(true),
+	)
+
+	wg.Wait()
 }

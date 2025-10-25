@@ -12,7 +12,7 @@ var (
 // Capitan is an event coordination system.
 type Capitan struct {
 	registry     map[Signal][]*Listener
-	workers      map[Signal]chan *Event
+	workers      map[Signal]*workerState
 	observers    []*Observer
 	shutdown     chan struct{}
 	shutdownOnce sync.Once
@@ -24,7 +24,7 @@ type Capitan struct {
 func New() *Capitan {
 	return &Capitan{
 		registry: make(map[Signal][]*Listener),
-		workers:  make(map[Signal]chan *Event),
+		workers:  make(map[Signal]*workerState),
 		shutdown: make(chan struct{}),
 	}
 }
@@ -61,19 +61,7 @@ func (c *Capitan) Hook(signal Signal, callback EventCallback) *Listener {
 
 	// If new signal, attach to all active observers
 	if !exists {
-		for _, obs := range c.observers {
-			obs.mu.Lock()
-			if obs.active {
-				obsListener := &Listener{
-					signal:   signal,
-					callback: obs.callback,
-					capitan:  c,
-				}
-				c.registry[signal] = append(c.registry[signal], obsListener)
-				obs.listeners = append(obs.listeners, obsListener)
-			}
-			obs.mu.Unlock()
-		}
+		c.attachObservers(signal)
 	}
 
 	return listener
@@ -122,6 +110,24 @@ func Emit(signal Signal, fields ...Field) {
 	defaultInstance().Emit(signal, fields...)
 }
 
+// attachObservers attaches all active observers to a signal.
+// Must be called while holding c.mu write lock.
+func (c *Capitan) attachObservers(signal Signal) {
+	for _, obs := range c.observers {
+		obs.mu.Lock()
+		if obs.active {
+			obsListener := &Listener{
+				signal:   signal,
+				callback: obs.callback,
+				capitan:  c,
+			}
+			c.registry[signal] = append(c.registry[signal], obsListener)
+			obs.listeners = append(obs.listeners, obsListener)
+		}
+		obs.mu.Unlock()
+	}
+}
+
 // unregister removes a listener from the registry.
 func (c *Capitan) unregister(listener *Listener) {
 	c.mu.Lock()
@@ -138,9 +144,15 @@ func (c *Capitan) unregister(listener *Listener) {
 		}
 	}
 
-	// Clean up empty signal entries
+	// Clean up empty signal entries and signal worker to exit
 	if len(c.registry[listener.signal]) == 0 {
 		delete(c.registry, listener.signal)
+
+		// Signal worker goroutine to drain and exit
+		if worker, exists := c.workers[listener.signal]; exists {
+			close(worker.done)
+			delete(c.workers, listener.signal)
+		}
 	}
 }
 

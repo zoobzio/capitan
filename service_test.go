@@ -226,7 +226,7 @@ func TestObserve(t *testing.T) {
 
 	observer := c.Observe(func(e *Event) {
 		mu.Lock()
-		received = append(received, e.Signal)
+		received = append(received, e.Signal())
 		mu.Unlock()
 		wg.Done()
 	})
@@ -308,7 +308,7 @@ func TestModuleLevelAPI(t *testing.T) {
 	if received == nil {
 		t.Error("event not received")
 	}
-	if received.Signal != sig {
-		t.Errorf("expected signal %q, got %q", sig, received.Signal)
+	if received.Signal() != sig {
+		t.Errorf("expected signal %q, got %q", sig, received.Signal())
 	}
 }

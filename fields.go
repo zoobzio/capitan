@@ -16,6 +16,19 @@ func (k StringKey) Field(value string) Field {
 	return StringField{key: k, value: value}
 }
 
+// From extracts the typed string value for this key from the event.
+// Returns the value and true if present, or zero value and false if not present or wrong type.
+func (k StringKey) From(e *Event) (string, bool) {
+	f := e.Get(k)
+	if f == nil {
+		return "", false
+	}
+	if sf, ok := f.(StringField); ok {
+		return sf.String(), true
+	}
+	return "", false
+}
+
 // NewStringKey creates a StringKey with the given name.
 func NewStringKey(name string) StringKey {
 	return StringKey{name: name}
@@ -35,6 +48,19 @@ func (IntKey) Variant() Variant { return VariantInt }
 // Field creates an IntField with this key and the given value.
 func (k IntKey) Field(value int) Field {
 	return IntField{key: k, value: value}
+}
+
+// From extracts the typed int value for this key from the event.
+// Returns the value and true if present, or zero value and false if not present or wrong type.
+func (k IntKey) From(e *Event) (int, bool) {
+	f := e.Get(k)
+	if f == nil {
+		return 0, false
+	}
+	if intf, ok := f.(IntField); ok {
+		return intf.Int(), true
+	}
+	return 0, false
 }
 
 // NewIntKey creates an IntKey with the given name.
@@ -58,6 +84,19 @@ func (k Float64Key) Field(value float64) Field {
 	return Float64Field{key: k, value: value}
 }
 
+// From extracts the typed float64 value for this key from the event.
+// Returns the value and true if present, or zero value and false if not present or wrong type.
+func (k Float64Key) From(e *Event) (float64, bool) {
+	f := e.Get(k)
+	if f == nil {
+		return 0, false
+	}
+	if ff, ok := f.(Float64Field); ok {
+		return ff.Float64(), true
+	}
+	return 0, false
+}
+
 // NewFloat64Key creates a Float64Key with the given name.
 func NewFloat64Key(name string) Float64Key {
 	return Float64Key{name: name}
@@ -77,6 +116,19 @@ func (BoolKey) Variant() Variant { return VariantBool }
 // Field creates a BoolField with this key and the given value.
 func (k BoolKey) Field(value bool) Field {
 	return BoolField{key: k, value: value}
+}
+
+// From extracts the typed bool value for this key from the event.
+// Returns the value and true if present, or zero value and false if not present or wrong type.
+func (k BoolKey) From(e *Event) (value bool, ok bool) {
+	f := e.Get(k)
+	if f == nil {
+		return false, false
+	}
+	if bf, fieldOk := f.(BoolField); fieldOk {
+		return bf.Bool(), true
+	}
+	return false, false
 }
 
 // NewBoolKey creates a BoolKey with the given name.

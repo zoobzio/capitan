@@ -20,7 +20,7 @@ func TestObserverDynamic(t *testing.T) {
 	// Create observer BEFORE any signals exist
 	observer := c.Observe(func(e *Event) {
 		mu.Lock()
-		received = append(received, e.Signal)
+		received = append(received, e.Signal())
 		mu.Unlock()
 		wg.Done()
 	})
