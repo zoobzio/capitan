@@ -8,6 +8,29 @@ import "context"
 // Silently drops events if no listeners are registered for the signal.
 // If the context is canceled before the event can be queued, the event is dropped.
 func (c *Capitan) Emit(ctx context.Context, signal Signal, fields ...Field) {
+	// Sync mode: process event directly without workers
+	if c.syncMode {
+		c.mu.RLock()
+		listeners := c.registry[signal]
+		c.mu.RUnlock()
+
+		// If no listeners, attach observers
+		if len(listeners) == 0 {
+			c.mu.Lock()
+			_, registryExists := c.registry[signal]
+			if !registryExists {
+				c.registry[signal] = nil
+				c.attachObservers(signal)
+			}
+			c.mu.Unlock()
+		}
+
+		// Create and process event synchronously
+		event := newEvent(ctx, signal, fields...)
+		c.processEvent(signal, event)
+		return
+	}
+
 	// Fast path: check if worker already exists (read lock)
 	c.mu.RLock()
 	_, exists := c.workers[signal]

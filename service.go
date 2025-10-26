@@ -8,8 +8,6 @@ import (
 var (
 	defaultCapitan *Capitan
 	defaultOnce    sync.Once
-	defaultOptions []Option
-	defaultOptMu   sync.Mutex
 )
 
 // Capitan is an event coordination system.
@@ -23,6 +21,7 @@ type Capitan struct {
 	mu           sync.RWMutex
 	bufferSize   int
 	panicHandler PanicHandler
+	syncMode     bool
 }
 
 // New creates a new Capitan instance with optional configuration.
@@ -38,34 +37,6 @@ func New(opts ...Option) *Capitan {
 		opt(c)
 	}
 	return c
-}
-
-// Configure sets options for the default Capitan instance.
-// Must be called before any module-level functions (Hook, Emit, Observe, Shutdown).
-// Subsequent calls have no effect once the default instance is created.
-func Configure(opts ...Option) {
-	defaultOptMu.Lock()
-	defaultOptions = opts
-	defaultOptMu.Unlock()
-}
-
-// WithBufferSize sets the event queue buffer size for each signal's worker.
-// Default is 16. Larger buffers reduce backpressure but increase memory usage.
-func WithBufferSize(size int) Option {
-	return func(c *Capitan) {
-		if size > 0 {
-			c.bufferSize = size
-		}
-	}
-}
-
-// WithPanicHandler sets a callback to be invoked when a listener panics.
-// The handler receives the signal and the recovered panic value.
-// By default, panics are recovered silently to prevent system crashes.
-func WithPanicHandler(handler PanicHandler) Option {
-	return func(c *Capitan) {
-		c.panicHandler = handler
-	}
 }
 
 // defaultInstance returns the default Capitan instance, creating it if necessary.
@@ -109,93 +80,9 @@ func (c *Capitan) Hook(signal Signal, callback EventCallback) *Listener {
 	return listener
 }
 
-// Observe registers a callback for all signals on the default instance (dynamic).
-// If signals are provided, only those signals will be observed (whitelist).
-// If no signals are provided, all signals will be observed.
-// The observer will receive events from both existing and future signals.
-// Returns an Observer that can be closed to unregister.
-func Observe(callback EventCallback, signals ...Signal) *Observer {
-	return defaultInstance().Observe(callback, signals...)
-}
-
-// Observe registers a callback for all signals (dynamic).
-// If signals are provided, only those signals will be observed (whitelist).
-// If no signals are provided, all signals will be observed.
-// The observer will receive events from both existing and future signals.
-// Returns an Observer that can be closed to unregister all listeners.
-func (c *Capitan) Observe(callback EventCallback, signals ...Signal) *Observer {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	o := &Observer{
-		listeners: make([]*Listener, 0, len(c.registry)),
-		callback:  callback,
-		capitan:   c,
-		active:    true,
-		signals:   nil, // nil = observe all
-	}
-
-	// Build whitelist if signals provided
-	if len(signals) > 0 {
-		o.signals = make(map[Signal]struct{}, len(signals))
-		for _, sig := range signals {
-			o.signals[sig] = struct{}{}
-		}
-	}
-
-	// Hook existing signals (filtered by whitelist if present)
-	for signal := range c.registry {
-		// Skip if whitelist exists and signal not in it
-		if o.signals != nil {
-			if _, ok := o.signals[signal]; !ok {
-				continue
-			}
-		}
-
-		listener := &Listener{
-			signal:   signal,
-			callback: callback,
-			capitan:  c,
-		}
-		c.registry[signal] = append(c.registry[signal], listener)
-		o.listeners = append(o.listeners, listener)
-	}
-
-	// Add to observers list for future signals
-	c.observers = append(c.observers, o)
-
-	return o
-}
-
 // Emit dispatches an event on the default instance.
 func Emit(ctx context.Context, signal Signal, fields ...Field) {
 	defaultInstance().Emit(ctx, signal, fields...)
-}
-
-// attachObservers attaches all active observers to a signal.
-// Must be called while holding c.mu write lock.
-func (c *Capitan) attachObservers(signal Signal) {
-	for _, obs := range c.observers {
-		obs.mu.Lock()
-		if obs.active {
-			// Skip if observer has whitelist and signal not in it
-			if obs.signals != nil {
-				if _, ok := obs.signals[signal]; !ok {
-					obs.mu.Unlock()
-					continue
-				}
-			}
-
-			obsListener := &Listener{
-				signal:   signal,
-				callback: obs.callback,
-				capitan:  c,
-			}
-			c.registry[signal] = append(c.registry[signal], obsListener)
-			obs.listeners = append(obs.listeners, obsListener)
-		}
-		obs.mu.Unlock()
-	}
 }
 
 // unregister removes a listener from the registry.

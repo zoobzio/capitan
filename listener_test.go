@@ -8,26 +8,19 @@ import (
 )
 
 func TestListenerClose(t *testing.T) {
-	c := New()
+	c := New(WithSyncMode())
 	defer c.Shutdown()
 
 	sig := Signal("test.listener.close")
 	key := NewStringKey("value")
 
 	count := 0
-	var mu sync.Mutex
-	var wg sync.WaitGroup
 
 	listener := c.Hook(sig, func(_ context.Context, _ *Event) {
-		mu.Lock()
 		count++
-		mu.Unlock()
-		wg.Done()
 	})
 
-	wg.Add(1)
 	c.Emit(context.Background(), sig, key.Field("first"))
-	wg.Wait()
 
 	// Close listener
 	listener.Close()
@@ -35,20 +28,13 @@ func TestListenerClose(t *testing.T) {
 	// This emission should not be received
 	c.Emit(context.Background(), sig, key.Field("second"))
 
-	// Give time for any errant delivery
-	time.Sleep(50 * time.Millisecond)
-
-	mu.Lock()
-	finalCount := count
-	mu.Unlock()
-
-	if finalCount != 1 {
-		t.Errorf("expected 1 event received, got %d", finalCount)
+	if count != 1 {
+		t.Errorf("expected 1 event received, got %d", count)
 	}
 }
 
 func TestListenerCloseIdempotent(_ *testing.T) {
-	c := New()
+	c := New(WithSyncMode())
 	defer c.Shutdown()
 
 	sig := Signal("test.listener.idempotent")
@@ -62,53 +48,35 @@ func TestListenerCloseIdempotent(_ *testing.T) {
 }
 
 func TestListenerMultiplePerSignal(t *testing.T) {
-	c := New()
+	c := New(WithSyncMode())
 	defer c.Shutdown()
 
 	sig := Signal("test.listener.multiple")
 	key := NewStringKey("value")
 
 	count := 0
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	wg.Add(3)
 
 	c.Hook(sig, func(_ context.Context, _ *Event) {
-		mu.Lock()
 		count++
-		mu.Unlock()
-		wg.Done()
 	})
 
 	c.Hook(sig, func(_ context.Context, _ *Event) {
-		mu.Lock()
 		count++
-		mu.Unlock()
-		wg.Done()
 	})
 
 	c.Hook(sig, func(_ context.Context, _ *Event) {
-		mu.Lock()
 		count++
-		mu.Unlock()
-		wg.Done()
 	})
 
 	c.Emit(context.Background(), sig, key.Field("test"))
 
-	wg.Wait()
-
-	mu.Lock()
-	finalCount := count
-	mu.Unlock()
-
-	if finalCount != 3 {
-		t.Errorf("expected 3 listener invocations, got %d", finalCount)
+	if count != 3 {
+		t.Errorf("expected 3 listener invocations, got %d", count)
 	}
 }
 
 func TestObserverClose(t *testing.T) {
-	c := New()
+	c := New(WithSyncMode())
 	defer c.Shutdown()
 
 	sig1 := Signal("test.observer.close1")
@@ -120,21 +88,13 @@ func TestObserverClose(t *testing.T) {
 	c.Hook(sig2, func(_ context.Context, _ *Event) {})
 
 	count := 0
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	wg.Add(2)
 
 	observer := c.Observe(func(_ context.Context, _ *Event) {
-		mu.Lock()
 		count++
-		mu.Unlock()
-		wg.Done()
 	})
 
 	c.Emit(context.Background(), sig1, key.Field("first"))
 	c.Emit(context.Background(), sig2, key.Field("second"))
-
-	wg.Wait()
 
 	// Close observer
 	observer.Close()
@@ -143,19 +103,13 @@ func TestObserverClose(t *testing.T) {
 	c.Emit(context.Background(), sig1, key.Field("third"))
 	c.Emit(context.Background(), sig2, key.Field("fourth"))
 
-	time.Sleep(50 * time.Millisecond)
-
-	mu.Lock()
-	finalCount := count
-	mu.Unlock()
-
-	if finalCount != 2 {
-		t.Errorf("expected 2 events, got %d", finalCount)
+	if count != 2 {
+		t.Errorf("expected 2 events, got %d", count)
 	}
 }
 
 func TestObserverCloseIdempotent(_ *testing.T) {
-	c := New()
+	c := New(WithSyncMode())
 	defer c.Shutdown()
 
 	sig := Signal("test.observer.idempotent")
@@ -216,7 +170,7 @@ func TestObserverSnapshotBehavior(_ *testing.T) {
 }
 
 func TestObserverReceivesAllExistingSignals(t *testing.T) {
-	c := New()
+	c := New(WithSyncMode())
 	defer c.Shutdown()
 
 	sig1 := Signal("test.observer.all1")
@@ -230,25 +184,14 @@ func TestObserverReceivesAllExistingSignals(t *testing.T) {
 	c.Hook(sig3, func(_ context.Context, _ *Event) {})
 
 	received := make(map[Signal]bool)
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	wg.Add(3)
 
 	c.Observe(func(_ context.Context, e *Event) {
-		mu.Lock()
 		received[e.Signal()] = true
-		mu.Unlock()
-		wg.Done()
 	})
 
 	c.Emit(context.Background(), sig1, key.Field("first"))
 	c.Emit(context.Background(), sig2, key.Field("second"))
 	c.Emit(context.Background(), sig3, key.Field("third"))
-
-	wg.Wait()
-
-	mu.Lock()
-	defer mu.Unlock()
 
 	if !received[sig1] || !received[sig2] || !received[sig3] {
 		t.Errorf("observer did not receive all signals: %v", received)

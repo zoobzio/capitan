@@ -85,13 +85,6 @@ type workerState struct {
 	done   chan struct{} // signals worker to drain and exit
 }
 
-// Option configures a Capitan instance.
-type Option func(*Capitan)
-
-// PanicHandler is called when a listener panics during event processing.
-// Receives the signal being processed and the recovered panic value.
-type PanicHandler func(signal Signal, recovered any)
-
 // Stats provides runtime metrics for a Capitan instance.
 type Stats struct {
 	// ActiveWorkers is the number of worker goroutines currently running.

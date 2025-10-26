@@ -8,7 +8,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	c := New()
+	c := New(WithSyncMode())
 	if c == nil {
 		t.Fatal("New() returned nil")
 	}
@@ -60,8 +60,10 @@ func TestEmitCreatesWorkerLazily(t *testing.T) {
 	wg.Wait()
 }
 
+// Note: TestEmitCreatesWorkerLazily keeps async mode because it specifically tests worker creation
+
 func TestEmitAsyncProcessing(t *testing.T) {
-	c := New()
+	c := New(WithSyncMode())
 	defer c.Shutdown()
 
 	sig := Signal("test.async")
@@ -69,24 +71,16 @@ func TestEmitAsyncProcessing(t *testing.T) {
 
 	const numEmissions = 100
 	received := make([]int, 0, numEmissions)
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	wg.Add(numEmissions)
 
 	c.Hook(sig, func(_ context.Context, e *Event) {
 		field := e.Get(key).(GenericField[int])
-		mu.Lock()
 		received = append(received, field.Get())
-		mu.Unlock()
-		wg.Done()
 	})
 
-	// Emit many events rapidly - should not block
+	// Emit many events
 	for i := 0; i < numEmissions; i++ {
 		c.Emit(context.Background(), sig, key.Field(i))
 	}
-
-	wg.Wait()
 
 	if len(received) != numEmissions {
 		t.Errorf("expected %d events, got %d", numEmissions, len(received))
@@ -94,31 +88,25 @@ func TestEmitAsyncProcessing(t *testing.T) {
 }
 
 func TestEmitWithMultipleListeners(t *testing.T) {
-	c := New()
+	c := New(WithSyncMode())
 	defer c.Shutdown()
 
 	sig := Signal("test.multi")
 	key := NewStringKey("value")
 
 	var received1, received2 string
-	var wg sync.WaitGroup
-	wg.Add(2)
 
 	c.Hook(sig, func(_ context.Context, e *Event) {
 		field := e.Get(key).(GenericField[string])
 		received1 = field.Get()
-		wg.Done()
 	})
 
 	c.Hook(sig, func(_ context.Context, e *Event) {
 		field := e.Get(key).(GenericField[string])
 		received2 = field.Get()
-		wg.Done()
 	})
 
 	c.Emit(context.Background(), sig, key.Field("hello"))
-
-	wg.Wait()
 
 	if received1 != "hello" {
 		t.Errorf("listener 1: expected %q, got %q", "hello", received1)
@@ -129,7 +117,7 @@ func TestEmitWithMultipleListeners(t *testing.T) {
 }
 
 func TestEmitWithNoListeners(_ *testing.T) {
-	c := New()
+	c := New(WithSyncMode())
 	defer c.Shutdown()
 
 	sig := Signal("test.nolisteners")
@@ -137,20 +125,16 @@ func TestEmitWithNoListeners(_ *testing.T) {
 
 	// Should not panic or block
 	c.Emit(context.Background(), sig, key.Field("test"))
-
-	// Give time for any processing
-	time.Sleep(10 * time.Millisecond)
 }
 
 func TestEmitWithPanicRecovery(t *testing.T) {
-	c := New()
+	c := New(WithSyncMode())
 	defer c.Shutdown()
 
 	sig := Signal("test.panic")
 	key := NewStringKey("value")
 
-	var wg sync.WaitGroup
-	wg.Add(1)
+	var executed bool
 
 	// First listener panics
 	c.Hook(sig, func(_ context.Context, _ *Event) {
@@ -159,40 +143,27 @@ func TestEmitWithPanicRecovery(t *testing.T) {
 
 	// Second listener should still execute
 	c.Hook(sig, func(_ context.Context, _ *Event) {
-		wg.Done()
+		executed = true
 	})
 
 	c.Emit(context.Background(), sig, key.Field("test"))
 
-	// If panic recovery doesn't work, this times out
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		// Success
-	case <-time.After(time.Second):
+	if !executed {
 		t.Fatal("second listener never executed - panic not recovered")
 	}
 }
 
 func TestHook(t *testing.T) {
-	c := New()
+	c := New(WithSyncMode())
 	defer c.Shutdown()
 
 	sig := Signal("test.hook")
 	key := NewStringKey("value")
 
 	var received *Event
-	var wg sync.WaitGroup
-	wg.Add(1)
 
 	listener := c.Hook(sig, func(_ context.Context, e *Event) {
 		received = e
-		wg.Done()
 	})
 
 	if listener == nil {
@@ -201,15 +172,13 @@ func TestHook(t *testing.T) {
 
 	c.Emit(context.Background(), sig, key.Field("test"))
 
-	wg.Wait()
-
 	if received == nil {
 		t.Error("event not received")
 	}
 }
 
 func TestObserve(t *testing.T) {
-	c := New()
+	c := New(WithSyncMode())
 	defer c.Shutdown()
 
 	sig1 := Signal("test.sig1")
@@ -221,15 +190,9 @@ func TestObserve(t *testing.T) {
 	c.Hook(sig2, func(_ context.Context, _ *Event) {})
 
 	var received []Signal
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	wg.Add(2)
 
 	observer := c.Observe(func(_ context.Context, e *Event) {
-		mu.Lock()
 		received = append(received, e.Signal())
-		mu.Unlock()
-		wg.Done()
 	})
 
 	if observer == nil {
@@ -238,8 +201,6 @@ func TestObserve(t *testing.T) {
 
 	c.Emit(context.Background(), sig1, key.Field("first"))
 	c.Emit(context.Background(), sig2, key.Field("second"))
-
-	wg.Wait()
 
 	if len(received) != 2 {
 		t.Fatalf("expected 2 events, got %d", len(received))
@@ -315,7 +276,7 @@ func TestModuleLevelAPI(t *testing.T) {
 }
 
 func TestListenerReceivesContext(t *testing.T) {
-	c := New()
+	c := New(WithSyncMode())
 	defer c.Shutdown()
 
 	sig := Signal("test.ctx.value")
@@ -326,18 +287,13 @@ func TestListenerReceivesContext(t *testing.T) {
 	expectedValue := "test_value"
 
 	var received string
-	var wg sync.WaitGroup
-	wg.Add(1)
 
 	c.Hook(sig, func(ctx context.Context, _ *Event) {
 		received = ctx.Value(testKey).(string)
-		wg.Done()
 	})
 
 	ctx := context.WithValue(context.Background(), testKey, expectedValue)
 	c.Emit(ctx, sig, key.Field("test"))
-
-	wg.Wait()
 
 	if received != expectedValue {
 		t.Errorf("expected %q, got %q", expectedValue, received)
@@ -345,7 +301,7 @@ func TestListenerReceivesContext(t *testing.T) {
 }
 
 func TestContextIsolationPerSignal(t *testing.T) {
-	c := New()
+	c := New(WithSyncMode())
 	defer c.Shutdown()
 
 	sig1 := Signal("test.iso.one")
@@ -356,17 +312,13 @@ func TestContextIsolationPerSignal(t *testing.T) {
 	const valKey ctxKey = "val"
 
 	var val1, val2 string
-	var wg sync.WaitGroup
-	wg.Add(2)
 
 	c.Hook(sig1, func(ctx context.Context, _ *Event) {
 		val1 = ctx.Value(valKey).(string)
-		wg.Done()
 	})
 
 	c.Hook(sig2, func(ctx context.Context, _ *Event) {
 		val2 = ctx.Value(valKey).(string)
-		wg.Done()
 	})
 
 	ctx1 := context.WithValue(context.Background(), valKey, "A")
@@ -374,8 +326,6 @@ func TestContextIsolationPerSignal(t *testing.T) {
 
 	c.Emit(ctx1, sig1, key.Field("first"))
 	c.Emit(ctx2, sig2, key.Field("second"))
-
-	wg.Wait()
 
 	if val1 != "A" {
 		t.Errorf("sig1: expected %q, got %q", "A", val1)

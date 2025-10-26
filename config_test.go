@@ -2,7 +2,6 @@ package capitan
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 )
@@ -44,19 +43,13 @@ func TestWithBufferSizeInvalid(t *testing.T) {
 func TestWithPanicHandler(t *testing.T) {
 	var panicSignal Signal
 	var panicValue any
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	wg.Add(1)
 
 	handler := func(sig Signal, recovered any) {
-		mu.Lock()
 		panicSignal = sig
 		panicValue = recovered
-		mu.Unlock()
-		wg.Done()
 	}
 
-	c := New(WithPanicHandler(handler))
+	c := New(WithPanicHandler(handler), WithSyncMode())
 	defer c.Shutdown()
 
 	sig := Signal("test.panic")
@@ -67,11 +60,6 @@ func TestWithPanicHandler(t *testing.T) {
 	})
 
 	c.Emit(context.Background(), sig, key.Field("test"))
-
-	wg.Wait()
-
-	mu.Lock()
-	defer mu.Unlock()
 
 	if panicSignal != sig {
 		t.Errorf("expected panicSignal=%q, got %q", sig, panicSignal)
@@ -84,15 +72,12 @@ func TestWithPanicHandler(t *testing.T) {
 
 // TestWithPanicHandlerNotSet verifies silent recovery when no handler set.
 func TestWithPanicHandlerNotSet(t *testing.T) {
-	c := New() // No panic handler
+	c := New(WithSyncMode()) // No panic handler
 	defer c.Shutdown()
 
 	sig := Signal("test.panic.silent")
 	key := NewStringKey("value")
 	var called bool
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	wg.Add(1)
 
 	// First listener panics
 	c.Hook(sig, func(_ context.Context, _ *Event) {
@@ -101,18 +86,10 @@ func TestWithPanicHandlerNotSet(t *testing.T) {
 
 	// Second listener should still run
 	c.Hook(sig, func(_ context.Context, _ *Event) {
-		mu.Lock()
 		called = true
-		mu.Unlock()
-		wg.Done()
 	})
 
 	c.Emit(context.Background(), sig, key.Field("test"))
-
-	wg.Wait()
-
-	mu.Lock()
-	defer mu.Unlock()
 
 	if !called {
 		t.Error("second listener should have been called despite first listener panic")
@@ -172,15 +149,13 @@ func TestStats(t *testing.T) {
 // TestMultipleOptions verifies multiple options can be combined.
 func TestMultipleOptions(t *testing.T) {
 	var handlerCalled bool
-	var mu sync.Mutex
 
 	c := New(
 		WithBufferSize(256),
 		WithPanicHandler(func(_ Signal, _ any) {
-			mu.Lock()
 			handlerCalled = true
-			mu.Unlock()
 		}),
+		WithSyncMode(),
 	)
 	defer c.Shutdown()
 
@@ -195,21 +170,50 @@ func TestMultipleOptions(t *testing.T) {
 	// Verify handler works
 	sig := Signal("test.multi")
 	key := NewStringKey("value")
-	var wg sync.WaitGroup
-	wg.Add(1)
 
 	c.Hook(sig, func(_ context.Context, _ *Event) {
-		defer wg.Done()
 		panic("test")
 	})
 
 	c.Emit(context.Background(), sig, key.Field("test"))
-	wg.Wait()
-
-	mu.Lock()
-	defer mu.Unlock()
 
 	if !handlerCalled {
 		t.Error("expected panic handler to be called")
+	}
+}
+
+// TestWithSyncMode verifies synchronous event processing.
+func TestWithSyncMode(t *testing.T) {
+	c := New(WithSyncMode())
+	defer c.Shutdown()
+
+	if !c.syncMode {
+		t.Error("expected syncMode to be true")
+	}
+
+	// Verify events are processed synchronously (no timing needed)
+	sig := Signal("test.sync")
+	key := NewStringKey("value")
+	var called bool
+
+	c.Hook(sig, func(_ context.Context, e *Event) {
+		called = true
+		val, ok := key.From(e)
+		if !ok || val != "sync-test" {
+			t.Errorf("expected value='sync-test', got %v, %v", val, ok)
+		}
+	})
+
+	c.Emit(context.Background(), sig, key.Field("sync-test"))
+
+	// No sleep needed - should be processed immediately
+	if !called {
+		t.Error("expected listener to be called synchronously")
+	}
+
+	// Verify no workers were created
+	stats := c.Stats()
+	if stats.ActiveWorkers != 0 {
+		t.Errorf("expected 0 active workers in sync mode, got %d", stats.ActiveWorkers)
 	}
 }

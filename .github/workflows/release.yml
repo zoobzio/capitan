@@ -90,6 +90,8 @@ jobs:
       - name: Verify module can be fetched
         run: |
           sleep 30  # Wait for module proxy to update
+          cd $(mktemp -d)
+          go mod init test
           go get github.com/zoobzio/capitan@${{ steps.get_tag.outputs.TAG }}
 
       - name: Release summary

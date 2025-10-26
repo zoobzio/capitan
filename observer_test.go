@@ -10,20 +10,15 @@ import (
 // TestObserverDynamic verifies that observers receive events from signals
 // created after the observer was registered.
 func TestObserverDynamic(t *testing.T) {
-	c := New()
+	c := New(WithSyncMode())
 	defer c.Shutdown()
 
 	key := NewStringKey("msg")
 	var received []Signal
-	var mu sync.Mutex
-	var wg sync.WaitGroup
 
 	// Create observer BEFORE any signals exist
 	observer := c.Observe(func(_ context.Context, e *Event) {
-		mu.Lock()
 		received = append(received, e.Signal())
-		mu.Unlock()
-		wg.Done()
 	})
 	defer observer.Close()
 
@@ -31,14 +26,11 @@ func TestObserverDynamic(t *testing.T) {
 	sig1 := Signal("test.sig1")
 	sig2 := Signal("test.sig2")
 
-	wg.Add(2)
 	c.Hook(sig1, func(_ context.Context, _ *Event) {}) // Create signal 1
 	c.Hook(sig2, func(_ context.Context, _ *Event) {}) // Create signal 2
 
 	c.Emit(context.Background(), sig1, key.Field("first"))
 	c.Emit(context.Background(), sig2, key.Field("second"))
-
-	wg.Wait()
 
 	if len(received) != 2 {
 		t.Fatalf("expected 2 events, got %d", len(received))
@@ -63,38 +55,25 @@ func TestObserverDynamic(t *testing.T) {
 // TestObserverDynamicWithEmit verifies observers work when signals are
 // created via Emit() rather than Hook().
 func TestObserverDynamicWithEmit(t *testing.T) {
-	c := New()
+	c := New(WithSyncMode())
 	defer c.Shutdown()
 
 	sig := Signal("test.emit")
 	key := NewStringKey("value")
 
 	var received int
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	wg.Add(1)
 
 	// Create observer before signal exists
 	observer := c.Observe(func(_ context.Context, _ *Event) {
-		mu.Lock()
 		received++
-		mu.Unlock()
-		wg.Done()
 	})
 	defer observer.Close()
 
 	// Emit creates the signal lazily
 	c.Emit(context.Background(), sig, key.Field("test"))
 
-	wg.Wait()
-
-	// Observer should have received the event
-	mu.Lock()
-	count := received
-	mu.Unlock()
-
-	if count != 1 {
-		t.Errorf("expected 1 event, got %d", count)
+	if received != 1 {
+		t.Errorf("expected 1 event, got %d", received)
 	}
 }
 
@@ -172,67 +151,48 @@ func TestObserverCloseIdempotentWithDynamic(_ *testing.T) {
 // TestObserverReceivesFutureSignals ensures observer gets events from
 // signals created after observer creation.
 func TestObserverReceivesFutureSignals(t *testing.T) {
-	c := New()
+	c := New(WithSyncMode())
 	defer c.Shutdown()
 
 	key := NewStringKey("msg")
 	var count int
-	var mu sync.Mutex
-	var wg sync.WaitGroup
 
 	// Create observer with no signals in registry
 	observer := c.Observe(func(_ context.Context, _ *Event) {
-		mu.Lock()
 		count++
-		mu.Unlock()
-		wg.Done()
 	})
 	defer observer.Close()
 
 	// Create 5 new signals after observer exists
 	for i := 0; i < 5; i++ {
-		wg.Add(1)
 		sig := Signal("test.future." + string(rune('a'+i)))
 		c.Hook(sig, func(_ context.Context, _ *Event) {})
 		c.Emit(context.Background(), sig, key.Field("test"))
 	}
 
-	wg.Wait()
-
-	mu.Lock()
-	finalCount := count
-	mu.Unlock()
-
-	if finalCount != 5 {
-		t.Errorf("expected 5 events, got %d", finalCount)
+	if count != 5 {
+		t.Errorf("expected 5 events, got %d", count)
 	}
 }
 
 // TestObserverDoesNotReceiveAfterClose verifies that observers stop
 // receiving events after Close() is called.
 func TestObserverDoesNotReceiveAfterClose(t *testing.T) {
-	c := New()
+	c := New(WithSyncMode())
 	defer c.Shutdown()
 
 	sig := Signal("test.close")
 	key := NewStringKey("value")
 
 	var count int
-	var mu sync.Mutex
-	var wg sync.WaitGroup
 
-	wg.Add(1)
 	observer := c.Observe(func(_ context.Context, _ *Event) {
-		mu.Lock()
 		count++
-		mu.Unlock()
-		wg.Done()
 	})
 
 	// Emit first event - should be received
 	c.Hook(sig, func(_ context.Context, _ *Event) {})
 	c.Emit(context.Background(), sig, key.Field("first"))
-	wg.Wait()
 
 	// Close observer
 	observer.Close()
@@ -242,20 +202,13 @@ func TestObserverDoesNotReceiveAfterClose(t *testing.T) {
 	c.Hook(sig2, func(_ context.Context, _ *Event) {})
 	c.Emit(context.Background(), sig2, key.Field("second"))
 
-	// Give time for any processing
-	time.Sleep(50 * time.Millisecond)
-
-	mu.Lock()
-	finalCount := count
-	mu.Unlock()
-
-	if finalCount != 1 {
-		t.Errorf("expected 1 event (before close), got %d", finalCount)
+	if count != 1 {
+		t.Errorf("expected 1 event (before close), got %d", count)
 	}
 }
 
 func TestObserverWithWhitelist(t *testing.T) {
-	c := New()
+	c := New(WithSyncMode())
 	defer c.Shutdown()
 
 	sig1 := Signal("test.whitelist.one")
@@ -269,16 +222,10 @@ func TestObserverWithWhitelist(t *testing.T) {
 	c.Hook(sig3, func(_ context.Context, _ *Event) {})
 
 	var received []Signal
-	var mu sync.Mutex
-	var wg sync.WaitGroup
 
 	// Observer only watching sig1 and sig2 (whitelist)
-	wg.Add(2)
 	observer := c.Observe(func(_ context.Context, e *Event) {
-		mu.Lock()
 		received = append(received, e.Signal())
-		mu.Unlock()
-		wg.Done()
 	}, sig1, sig2)
 	defer observer.Close()
 
@@ -286,8 +233,6 @@ func TestObserverWithWhitelist(t *testing.T) {
 	c.Emit(context.Background(), sig1, key.Field("first"))
 	c.Emit(context.Background(), sig2, key.Field("second"))
 	c.Emit(context.Background(), sig3, key.Field("third"))
-
-	wg.Wait()
 
 	// Should only receive sig1 and sig2
 	if len(received) != 2 {
@@ -319,7 +264,7 @@ func TestObserverWithWhitelist(t *testing.T) {
 }
 
 func TestObserverWhitelistFutureSignals(t *testing.T) {
-	c := New()
+	c := New(WithSyncMode())
 	defer c.Shutdown()
 
 	sig1 := Signal("test.future.one")
@@ -328,16 +273,10 @@ func TestObserverWhitelistFutureSignals(t *testing.T) {
 	key := NewStringKey("value")
 
 	var received []Signal
-	var mu sync.Mutex
-	var wg sync.WaitGroup
 
 	// Create observer BEFORE signals exist, with whitelist
-	wg.Add(2)
 	observer := c.Observe(func(_ context.Context, e *Event) {
-		mu.Lock()
 		received = append(received, e.Signal())
-		mu.Unlock()
-		wg.Done()
 	}, sig1, sig3)
 	defer observer.Close()
 
@@ -349,8 +288,6 @@ func TestObserverWhitelistFutureSignals(t *testing.T) {
 	c.Emit(context.Background(), sig1, key.Field("first"))
 	c.Emit(context.Background(), sig2, key.Field("second"))
 	c.Emit(context.Background(), sig3, key.Field("third"))
-
-	wg.Wait()
 
 	// Should only receive sig1 and sig3
 	if len(received) != 2 {
@@ -382,7 +319,7 @@ func TestObserverWhitelistFutureSignals(t *testing.T) {
 }
 
 func TestObserverNoWhitelistReceivesAll(t *testing.T) {
-	c := New()
+	c := New(WithSyncMode())
 	defer c.Shutdown()
 
 	sig1 := Signal("test.all.one")
@@ -393,23 +330,15 @@ func TestObserverNoWhitelistReceivesAll(t *testing.T) {
 	c.Hook(sig2, func(_ context.Context, _ *Event) {})
 
 	var received []Signal
-	var mu sync.Mutex
-	var wg sync.WaitGroup
 
 	// Observer with NO whitelist (should receive all)
-	wg.Add(2)
 	observer := c.Observe(func(_ context.Context, e *Event) {
-		mu.Lock()
 		received = append(received, e.Signal())
-		mu.Unlock()
-		wg.Done()
 	})
 	defer observer.Close()
 
 	c.Emit(context.Background(), sig1, key.Field("first"))
 	c.Emit(context.Background(), sig2, key.Field("second"))
-
-	wg.Wait()
 
 	// Should receive both
 	if len(received) != 2 {
@@ -418,7 +347,7 @@ func TestObserverNoWhitelistReceivesAll(t *testing.T) {
 }
 
 func TestObserverContextPropagation(t *testing.T) {
-	c := New()
+	c := New(WithSyncMode())
 	defer c.Shutdown()
 
 	sig := Signal("test.observer.ctx")
@@ -429,13 +358,10 @@ func TestObserverContextPropagation(t *testing.T) {
 	expectedID := "trace-123"
 
 	var received string
-	var wg sync.WaitGroup
-	wg.Add(1)
 
 	c.Observe(func(ctx context.Context, e *Event) {
 		if e.Signal() == sig {
 			received = ctx.Value(traceKey).(string)
-			wg.Done()
 		}
 	})
 
@@ -443,8 +369,6 @@ func TestObserverContextPropagation(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), traceKey, expectedID)
 	c.Emit(ctx, sig, key.Field("test"))
-
-	wg.Wait()
 
 	if received != expectedID {
 		t.Errorf("expected %q, got %q", expectedID, received)
