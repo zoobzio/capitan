@@ -479,3 +479,127 @@ func TestFromTypeMismatch(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestInt32Key(t *testing.T) {
+	key := NewInt32Key("value")
+	if key.Name() != "value" {
+		t.Errorf("expected name %q, got %q", "value", key.Name())
+	}
+	if key.Variant() != VariantInt32 {
+		t.Errorf("expected variant %v, got %v", VariantInt32, key.Variant())
+	}
+	field := key.Field(int32(42))
+	if field.Value() != int32(42) {
+		t.Errorf("expected value %d, got %v", 42, field.Value())
+	}
+}
+
+func TestInt64Key(t *testing.T) {
+	key := NewInt64Key("value")
+	if key.Name() != "value" {
+		t.Errorf("expected name %q, got %q", "value", key.Name())
+	}
+	if key.Variant() != VariantInt64 {
+		t.Errorf("expected variant %v, got %v", VariantInt64, key.Variant())
+	}
+	field := key.Field(int64(42))
+	if field.Value() != int64(42) {
+		t.Errorf("expected value %d, got %v", 42, field.Value())
+	}
+}
+
+func TestUintKey(t *testing.T) {
+	key := NewUintKey("value")
+	if key.Name() != "value" {
+		t.Errorf("expected name %q, got %q", "value", key.Name())
+	}
+	if key.Variant() != VariantUint {
+		t.Errorf("expected variant %v, got %v", VariantUint, key.Variant())
+	}
+	field := key.Field(uint(42))
+	if field.Value() != uint(42) {
+		t.Errorf("expected value %d, got %v", 42, field.Value())
+	}
+}
+
+func TestUint32Key(t *testing.T) {
+	key := NewUint32Key("value")
+	if key.Name() != "value" {
+		t.Errorf("expected name %q, got %q", "value", key.Name())
+	}
+	if key.Variant() != VariantUint32 {
+		t.Errorf("expected variant %v, got %v", VariantUint32, key.Variant())
+	}
+	field := key.Field(uint32(42))
+	if field.Value() != uint32(42) {
+		t.Errorf("expected value %d, got %v", 42, field.Value())
+	}
+}
+
+func TestUint64Key(t *testing.T) {
+	key := NewUint64Key("value")
+	if key.Name() != "value" {
+		t.Errorf("expected name %q, got %q", "value", key.Name())
+	}
+	if key.Variant() != VariantUint64 {
+		t.Errorf("expected variant %v, got %v", VariantUint64, key.Variant())
+	}
+	field := key.Field(uint64(42))
+	if field.Value() != uint64(42) {
+		t.Errorf("expected value %d, got %v", 42, field.Value())
+	}
+}
+
+func TestFloat32Key(t *testing.T) {
+	key := NewFloat32Key("value")
+	if key.Name() != "value" {
+		t.Errorf("expected name %q, got %q", "value", key.Name())
+	}
+	if key.Variant() != VariantFloat32 {
+		t.Errorf("expected variant %v, got %v", VariantFloat32, key.Variant())
+	}
+	field := key.Field(float32(3.14))
+	if field.Value() != float32(3.14) {
+		t.Errorf("expected value %f, got %v", 3.14, field.Value())
+	}
+}
+
+func TestTimeKey(t *testing.T) {
+	key := NewTimeKey("timestamp")
+	if key.Name() != "timestamp" {
+		t.Errorf("expected name %q, got %q", "timestamp", key.Name())
+	}
+	if key.Variant() != VariantTime {
+		t.Errorf("expected variant %v, got %v", VariantTime, key.Variant())
+	}
+}
+
+func TestDurationKey(t *testing.T) {
+	key := NewDurationKey("elapsed")
+	if key.Name() != "elapsed" {
+		t.Errorf("expected name %q, got %q", "elapsed", key.Name())
+	}
+	if key.Variant() != VariantDuration {
+		t.Errorf("expected variant %v, got %v", VariantDuration, key.Variant())
+	}
+}
+
+func TestBytesKey(t *testing.T) {
+	key := NewBytesKey("data")
+	if key.Name() != "data" {
+		t.Errorf("expected name %q, got %q", "data", key.Name())
+	}
+	if key.Variant() != VariantBytes {
+		t.Errorf("expected variant %v, got %v", VariantBytes, key.Variant())
+	}
+}
+
+func TestErrorKey(t *testing.T) {
+	key := NewErrorKey("err")
+	if key.Name() != "err" {
+		t.Errorf("expected name %q, got %q", "err", key.Name())
+	}
+	if key.Variant() != VariantError {
+		t.Errorf("expected variant %v, got %v", VariantError, key.Variant())
+	}
+}
