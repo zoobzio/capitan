@@ -122,12 +122,18 @@ listener := capitan.Hook(userLogin, func(ctx context.Context, e *capitan.Event) 
 
 **Observers** watch all signals (dynamic):
 ```go
+// Observe all signals
 observer := capitan.Observe(func(ctx context.Context, e *capitan.Event) {
     // Log all events
 })
+
+// Observe specific signals only (whitelist)
+observer := capitan.Observe(func(ctx context.Context, e *capitan.Event) {
+    // Log only these events
+}, signal1, signal2)
 ```
 
-Observers receive events from both existing signals and any signals created after the observer is registered. This is compatible with lazy signal initialization - observers automatically attach to workers as they're created.
+Observers receive events from both existing signals and any signals created after the observer is registered. This is compatible with lazy signal initialization - observers automatically attach to workers as they're created. When signals are provided to `Observe()`, only those signals are observed (whitelist mode).
 
 ### Best Practice: Define Signals and Keys as Constants
 
@@ -351,12 +357,22 @@ observer.Close() // Stop all observer listeners
 
 ## Field Types
 
-Capitan provides four built-in field types:
+Capitan provides built-in field types for common Go types:
 
 - `StringKey` - string values
 - `IntKey` - int values
+- `Int32Key` - int32 values
+- `Int64Key` - int64 values
+- `UintKey` - uint values
+- `Uint32Key` - uint32 values
+- `Uint64Key` - uint64 values
+- `Float32Key` - float32 values
 - `Float64Key` - float64 values
 - `BoolKey` - bool values
+- `TimeKey` - time.Time values
+- `DurationKey` - time.Duration values
+- `BytesKey` - []byte values
+- `ErrorKey` - error values
 
 Access typed values using the From() method:
 ```go
