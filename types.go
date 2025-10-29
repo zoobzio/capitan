@@ -40,10 +40,20 @@ type Key interface {
 type Variant string
 
 const (
-	VariantString  Variant = "string"
-	VariantInt     Variant = "int"
-	VariantFloat64 Variant = "float64"
-	VariantBool    Variant = "bool"
+	VariantString   Variant = "string"
+	VariantInt      Variant = "int"
+	VariantInt32    Variant = "int32"
+	VariantInt64    Variant = "int64"
+	VariantUint     Variant = "uint"
+	VariantUint32   Variant = "uint32"
+	VariantUint64   Variant = "uint64"
+	VariantFloat32  Variant = "float32"
+	VariantFloat64  Variant = "float64"
+	VariantBool     Variant = "bool"
+	VariantTime     Variant = "time.Time"
+	VariantDuration Variant = "time.Duration"
+	VariantBytes    Variant = "[]byte"
+	VariantError    Variant = "error"
 )
 
 // Field represents a typed value with semantic meaning in an Event.

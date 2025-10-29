@@ -1,5 +1,7 @@
 package capitan
 
+import "time"
+
 // GenericKey is a Key implementation for any type T.
 // All built-in key types (StringKey, IntKey, etc.) are aliases of GenericKey[T].
 type GenericKey[T any] struct {
@@ -60,6 +62,54 @@ func NewIntKey(name string) IntKey {
 	return GenericKey[int]{name: name, variant: VariantInt}
 }
 
+// Int32Key is a Key implementation for int32 values.
+type Int32Key = GenericKey[int32]
+
+// NewInt32Key creates an Int32Key with the given name.
+func NewInt32Key(name string) Int32Key {
+	return GenericKey[int32]{name: name, variant: VariantInt32}
+}
+
+// Int64Key is a Key implementation for int64 values.
+type Int64Key = GenericKey[int64]
+
+// NewInt64Key creates an Int64Key with the given name.
+func NewInt64Key(name string) Int64Key {
+	return GenericKey[int64]{name: name, variant: VariantInt64}
+}
+
+// UintKey is a Key implementation for uint values.
+type UintKey = GenericKey[uint]
+
+// NewUintKey creates a UintKey with the given name.
+func NewUintKey(name string) UintKey {
+	return GenericKey[uint]{name: name, variant: VariantUint}
+}
+
+// Uint32Key is a Key implementation for uint32 values.
+type Uint32Key = GenericKey[uint32]
+
+// NewUint32Key creates a Uint32Key with the given name.
+func NewUint32Key(name string) Uint32Key {
+	return GenericKey[uint32]{name: name, variant: VariantUint32}
+}
+
+// Uint64Key is a Key implementation for uint64 values.
+type Uint64Key = GenericKey[uint64]
+
+// NewUint64Key creates a Uint64Key with the given name.
+func NewUint64Key(name string) Uint64Key {
+	return GenericKey[uint64]{name: name, variant: VariantUint64}
+}
+
+// Float32Key is a Key implementation for float32 values.
+type Float32Key = GenericKey[float32]
+
+// NewFloat32Key creates a Float32Key with the given name.
+func NewFloat32Key(name string) Float32Key {
+	return GenericKey[float32]{name: name, variant: VariantFloat32}
+}
+
 // Float64Key is a Key implementation for float64 values.
 type Float64Key = GenericKey[float64]
 
@@ -74,4 +124,36 @@ type BoolKey = GenericKey[bool]
 // NewBoolKey creates a BoolKey with the given name.
 func NewBoolKey(name string) BoolKey {
 	return GenericKey[bool]{name: name, variant: VariantBool}
+}
+
+// TimeKey is a Key implementation for time.Time values.
+type TimeKey = GenericKey[time.Time]
+
+// NewTimeKey creates a TimeKey with the given name.
+func NewTimeKey(name string) TimeKey {
+	return GenericKey[time.Time]{name: name, variant: VariantTime}
+}
+
+// DurationKey is a Key implementation for time.Duration values.
+type DurationKey = GenericKey[time.Duration]
+
+// NewDurationKey creates a DurationKey with the given name.
+func NewDurationKey(name string) DurationKey {
+	return GenericKey[time.Duration]{name: name, variant: VariantDuration}
+}
+
+// BytesKey is a Key implementation for []byte values.
+type BytesKey = GenericKey[[]byte]
+
+// NewBytesKey creates a BytesKey with the given name.
+func NewBytesKey(name string) BytesKey {
+	return GenericKey[[]byte]{name: name, variant: VariantBytes}
+}
+
+// ErrorKey is a Key implementation for error values.
+type ErrorKey = GenericKey[error]
+
+// NewErrorKey creates an ErrorKey with the given name.
+func NewErrorKey(name string) ErrorKey {
+	return GenericKey[error]{name: name, variant: VariantError}
 }
