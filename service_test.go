@@ -466,3 +466,16 @@ func TestModuleLevelShutdown(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestDefault(t *testing.T) {
+	c := Default()
+	if c == nil {
+		t.Fatal("Default() returned nil")
+	}
+
+	// Verify it returns the same instance
+	c2 := Default()
+	if c != c2 {
+		t.Error("Default() should return the same instance")
+	}
+}

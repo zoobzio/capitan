@@ -50,6 +50,11 @@ func defaultInstance() *Capitan {
 	return defaultCapitan
 }
 
+// Default returns the default Capitan instance.
+func Default() *Capitan {
+	return defaultInstance()
+}
+
 // Hook registers a callback for the given signal on the default instance.
 // Returns a Listener that can be closed to unregister.
 func Hook(signal Signal, callback EventCallback) *Listener {
