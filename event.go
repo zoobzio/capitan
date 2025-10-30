@@ -9,7 +9,8 @@ import (
 var eventPool = sync.Pool{
 	New: func() any {
 		return &Event{
-			fields: make(map[string]Field),
+			fields:   make(map[string]Field),
+			severity: SeverityInfo,
 		}
 	},
 }
@@ -28,6 +29,9 @@ type Event struct {
 
 	// fields contains the event's data as key-value pairs, keyed by Key.Name().
 	fields map[string]Field
+
+	// severity indicates the logging severity level of this event.
+	severity Severity
 }
 
 // Signal returns the event's signal identifier.
@@ -46,13 +50,19 @@ func (e *Event) Context() context.Context {
 	return e.ctx
 }
 
-// newEvent creates an Event with the given context, signal and fields.
+// Severity returns the event's severity level.
+func (e *Event) Severity() Severity {
+	return e.severity
+}
+
+// newEvent creates an Event with the given context, signal, severity and fields.
 // Events are pooled internally to reduce allocations.
-func newEvent(ctx context.Context, signal Signal, fields ...Field) *Event {
+func newEvent(ctx context.Context, signal Signal, severity Severity, fields ...Field) *Event {
 	e := eventPool.Get().(*Event) //nolint:errcheck // Pool always returns *Event
 	e.signal = signal
 	e.timestamp = time.Now()
 	e.ctx = ctx
+	e.severity = severity
 
 	// Clear existing fields
 	for k := range e.fields {

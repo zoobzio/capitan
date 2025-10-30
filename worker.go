@@ -2,12 +2,38 @@ package capitan
 
 import "context"
 
-// Emit dispatches an event with the given context, signal and fields.
+// Emit dispatches an event with Info severity (default).
 // Queues the event for asynchronous processing by the signal's worker goroutine.
 // Creates a worker goroutine lazily on first emission to this signal.
 // Silently drops events if no listeners are registered for the signal.
 // If the context is canceled before the event can be queued, the event is dropped.
 func (c *Capitan) Emit(ctx context.Context, signal Signal, fields ...Field) {
+	c.emitWithSeverity(ctx, signal, SeverityInfo, fields...)
+}
+
+// Debug dispatches an event with Debug severity.
+func (c *Capitan) Debug(ctx context.Context, signal Signal, fields ...Field) {
+	c.emitWithSeverity(ctx, signal, SeverityDebug, fields...)
+}
+
+// Info dispatches an event with Info severity.
+func (c *Capitan) Info(ctx context.Context, signal Signal, fields ...Field) {
+	c.emitWithSeverity(ctx, signal, SeverityInfo, fields...)
+}
+
+// Warn dispatches an event with Warn severity.
+func (c *Capitan) Warn(ctx context.Context, signal Signal, fields ...Field) {
+	c.emitWithSeverity(ctx, signal, SeverityWarn, fields...)
+}
+
+// Error dispatches an event with Error severity.
+func (c *Capitan) Error(ctx context.Context, signal Signal, fields ...Field) {
+	c.emitWithSeverity(ctx, signal, SeverityError, fields...)
+}
+
+// emitWithSeverity dispatches an event with the given severity level.
+// Internal function used by public emit methods.
+func (c *Capitan) emitWithSeverity(ctx context.Context, signal Signal, severity Severity, fields ...Field) {
 	// Sync mode: process event directly without workers
 	if c.syncMode {
 		c.mu.RLock()
@@ -26,7 +52,7 @@ func (c *Capitan) Emit(ctx context.Context, signal Signal, fields ...Field) {
 		}
 
 		// Create and process event synchronously
-		event := newEvent(ctx, signal, fields...)
+		event := newEvent(ctx, signal, severity, fields...)
 		c.processEvent(signal, event)
 		return
 	}
@@ -76,7 +102,7 @@ func (c *Capitan) Emit(ctx context.Context, signal Signal, fields ...Field) {
 	}
 
 	// Create event from pool
-	event := newEvent(ctx, signal, fields...)
+	event := newEvent(ctx, signal, severity, fields...)
 
 	// Capture worker reference atomically to avoid TOCTOU race
 	c.mu.RLock()

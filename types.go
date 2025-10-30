@@ -26,6 +26,16 @@ package capitan
 // Signal represents an event type identifier used for routing events to listeners.
 type Signal string
 
+// Severity represents the logging severity level of an event.
+type Severity string
+
+const (
+	SeverityDebug Severity = "DEBUG"
+	SeverityInfo  Severity = "INFO"
+	SeverityWarn  Severity = "WARN"
+	SeverityError Severity = "ERROR"
+)
+
 // Key represents a typed semantic identifier for a field.
 // Each Key implementation is bound to a specific Variant, ensuring type safety.
 type Key interface {

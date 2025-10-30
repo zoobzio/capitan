@@ -404,6 +404,43 @@ func TestModuleLevelObserve(t *testing.T) {
 	}
 }
 
+func TestModuleLevelSeverityMethods(t *testing.T) {
+	sig := Signal("test.module.severity")
+	key := NewStringKey("value")
+
+	tests := []struct {
+		name     string
+		emitFunc func(context.Context, Signal, ...Field)
+		expected Severity
+	}{
+		{"Debug", Debug, SeverityDebug},
+		{"Info", Info, SeverityInfo},
+		{"Warn", Warn, SeverityWarn},
+		{"Error", Error, SeverityError},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var receivedSeverity Severity
+			var wg sync.WaitGroup
+			wg.Add(1)
+
+			listener := Hook(sig, func(_ context.Context, e *Event) {
+				receivedSeverity = e.Severity()
+				wg.Done()
+			})
+			defer listener.Close()
+
+			tt.emitFunc(context.Background(), sig, key.Field("test"))
+			wg.Wait()
+
+			if receivedSeverity != tt.expected {
+				t.Errorf("expected severity %q, got %q", tt.expected, receivedSeverity)
+			}
+		})
+	}
+}
+
 func TestModuleLevelShutdown(t *testing.T) {
 	sig := Signal("test.shutdown.module")
 	key := NewStringKey("value")

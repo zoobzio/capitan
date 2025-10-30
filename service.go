@@ -80,9 +80,29 @@ func (c *Capitan) Hook(signal Signal, callback EventCallback) *Listener {
 	return listener
 }
 
-// Emit dispatches an event on the default instance.
+// Emit dispatches an event with Info severity on the default instance.
 func Emit(ctx context.Context, signal Signal, fields ...Field) {
 	defaultInstance().Emit(ctx, signal, fields...)
+}
+
+// Debug dispatches an event with Debug severity on the default instance.
+func Debug(ctx context.Context, signal Signal, fields ...Field) {
+	defaultInstance().Debug(ctx, signal, fields...)
+}
+
+// Info dispatches an event with Info severity on the default instance.
+func Info(ctx context.Context, signal Signal, fields ...Field) {
+	defaultInstance().Info(ctx, signal, fields...)
+}
+
+// Warn dispatches an event with Warn severity on the default instance.
+func Warn(ctx context.Context, signal Signal, fields ...Field) {
+	defaultInstance().Warn(ctx, signal, fields...)
+}
+
+// Error dispatches an event with Error severity on the default instance.
+func Error(ctx context.Context, signal Signal, fields ...Field) {
+	defaultInstance().Error(ctx, signal, fields...)
 }
 
 // unregister removes a listener from the registry.

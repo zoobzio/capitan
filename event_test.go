@@ -11,7 +11,7 @@ func TestEventGet(t *testing.T) {
 	strKey := NewStringKey("name")
 	intKey := NewIntKey("count")
 
-	event := newEvent(context.Background(), sig, strKey.Field("test"), intKey.Field(42))
+	event := newEvent(context.Background(), sig, SeverityInfo, strKey.Field("test"), intKey.Field(42))
 
 	nameField := event.Get(strKey)
 	if nameField == nil {
@@ -45,7 +45,7 @@ func TestEventGetMissingKey(t *testing.T) {
 	strKey := NewStringKey("existing")
 	missingKey := NewStringKey("missing")
 
-	event := newEvent(context.Background(), sig, strKey.Field("test"))
+	event := newEvent(context.Background(), sig, SeverityInfo, strKey.Field("test"))
 
 	field := event.Get(missingKey)
 	if field != nil {
@@ -59,7 +59,7 @@ func TestEventFields(t *testing.T) {
 	intKey := NewIntKey("count")
 	boolKey := NewBoolKey("active")
 
-	event := newEvent(context.Background(), sig,
+	event := newEvent(context.Background(), sig, SeverityInfo,
 		strKey.Field("test"),
 		intKey.Field(42),
 		boolKey.Field(true),
@@ -105,7 +105,7 @@ func TestEventSignal(t *testing.T) {
 	sig := Signal("test.signal")
 	key := NewStringKey("value")
 
-	event := newEvent(context.Background(), sig, key.Field("test"))
+	event := newEvent(context.Background(), sig, SeverityInfo, key.Field("test"))
 
 	if event.Signal() != sig {
 		t.Errorf("expected signal %q, got %q", sig, event.Signal())
@@ -117,7 +117,7 @@ func TestEventTimestamp(t *testing.T) {
 	key := NewStringKey("value")
 
 	before := time.Now()
-	event := newEvent(context.Background(), sig, key.Field("test"))
+	event := newEvent(context.Background(), sig, SeverityInfo, key.Field("test"))
 	after := time.Now()
 
 	if event.Timestamp().Before(before) || event.Timestamp().After(after) {
@@ -130,7 +130,7 @@ func TestEventPooling(t *testing.T) {
 	key := NewStringKey("value")
 
 	// Create first event with "first" value
-	event1 := newEvent(context.Background(), sig, key.Field("first"))
+	event1 := newEvent(context.Background(), sig, SeverityInfo, key.Field("first"))
 	field1 := event1.Get(key).(GenericField[string])
 	if field1.Get() != "first" {
 		t.Errorf("event1: expected %q, got %q", "first", field1.Get())
@@ -140,7 +140,7 @@ func TestEventPooling(t *testing.T) {
 	eventPool.Put(event1)
 
 	// Create second event with "second" value
-	event2 := newEvent(context.Background(), sig, key.Field("second"))
+	event2 := newEvent(context.Background(), sig, SeverityInfo, key.Field("second"))
 	field2 := event2.Get(key).(GenericField[string])
 	if field2.Get() != "second" {
 		t.Errorf("event2: expected %q, got %q - pool not cleared properly", "second", field2.Get())
@@ -156,7 +156,7 @@ func TestEventFieldsDefensiveCopy(t *testing.T) {
 	sig := Signal("test.defensive")
 	key := NewStringKey("value")
 
-	event := newEvent(context.Background(), sig, key.Field("test"))
+	event := newEvent(context.Background(), sig, SeverityInfo, key.Field("test"))
 
 	fields1 := event.Fields()
 	fields2 := event.Fields()
@@ -176,7 +176,7 @@ func TestEventContext(t *testing.T) {
 	expectedValue := "test_value"
 
 	ctx := context.WithValue(context.Background(), testKey, expectedValue)
-	event := newEvent(ctx, sig, key.Field("test"))
+	event := newEvent(ctx, sig, SeverityInfo, key.Field("test"))
 
 	eventCtx := event.Context()
 	if eventCtx == nil {
@@ -193,7 +193,7 @@ func TestEventContextBackground(t *testing.T) {
 	sig := Signal("test.background")
 	key := NewStringKey("value")
 
-	event := newEvent(context.Background(), sig, key.Field("test"))
+	event := newEvent(context.Background(), sig, SeverityInfo, key.Field("test"))
 
 	ctx := event.Context()
 	if ctx == nil {
@@ -202,5 +202,82 @@ func TestEventContextBackground(t *testing.T) {
 
 	if ctx.Err() != nil {
 		t.Errorf("background context should not have error, got %v", ctx.Err())
+	}
+}
+
+func TestEventSeverity(t *testing.T) {
+	sig := Signal("test.severity")
+	key := NewStringKey("value")
+
+	tests := []struct {
+		name     string
+		severity Severity
+	}{
+		{"Debug", SeverityDebug},
+		{"Info", SeverityInfo},
+		{"Warn", SeverityWarn},
+		{"Error", SeverityError},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			event := newEvent(context.Background(), sig, tt.severity, key.Field("test"))
+			if event.Severity() != tt.severity {
+				t.Errorf("expected severity %q, got %q", tt.severity, event.Severity())
+			}
+		})
+	}
+}
+
+func TestEventDefaultSeverity(t *testing.T) {
+	sig := Signal("test.default")
+	key := NewStringKey("value")
+
+	// When using Emit(), severity should default to Info
+	c := New()
+	var receivedSeverity Severity
+	c.Hook(sig, func(_ context.Context, e *Event) {
+		receivedSeverity = e.Severity()
+	})
+
+	c.Emit(context.Background(), sig, key.Field("test"))
+	c.Shutdown()
+
+	if receivedSeverity != SeverityInfo {
+		t.Errorf("expected default severity %q, got %q", SeverityInfo, receivedSeverity)
+	}
+}
+
+func TestSeverityMethods(t *testing.T) {
+	sig := Signal("test.severity.methods")
+	key := NewStringKey("value")
+
+	tests := []struct {
+		name     string
+		emitFunc func(*Capitan, context.Context, Signal, ...Field)
+		expected Severity
+	}{
+		{"Debug", (*Capitan).Debug, SeverityDebug},
+		{"Info", (*Capitan).Info, SeverityInfo},
+		{"Warn", (*Capitan).Warn, SeverityWarn},
+		{"Error", (*Capitan).Error, SeverityError},
+		{"Emit", (*Capitan).Emit, SeverityInfo},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := New()
+			var receivedSeverity Severity
+			c.Hook(sig, func(_ context.Context, e *Event) {
+				receivedSeverity = e.Severity()
+			})
+
+			tt.emitFunc(c, context.Background(), sig, key.Field("test"))
+			c.Shutdown()
+
+			if receivedSeverity != tt.expected {
+				t.Errorf("expected severity %q, got %q", tt.expected, receivedSeverity)
+			}
+		})
 	}
 }
