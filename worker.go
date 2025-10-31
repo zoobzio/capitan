@@ -1,6 +1,9 @@
 package capitan
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // Emit dispatches an event with Info severity (default).
 // Queues the event for asynchronous processing by the signal's worker goroutine.
@@ -34,6 +37,9 @@ func (c *Capitan) Error(ctx context.Context, signal Signal, fields ...Field) {
 // emitWithSeverity dispatches an event with the given severity level.
 // Internal function used by public emit methods.
 func (c *Capitan) emitWithSeverity(ctx context.Context, signal Signal, severity Severity, fields ...Field) {
+	// Capture timestamp immediately to preserve chronological ordering
+	timestamp := time.Now()
+
 	// Sync mode: process event directly without workers
 	if c.syncMode {
 		c.mu.RLock()
@@ -52,7 +58,7 @@ func (c *Capitan) emitWithSeverity(ctx context.Context, signal Signal, severity 
 		}
 
 		// Create and process event synchronously
-		event := newEvent(ctx, signal, severity, fields...)
+		event := newEvent(ctx, signal, severity, timestamp, fields...)
 		c.processEvent(signal, event)
 		return
 	}
@@ -102,7 +108,7 @@ func (c *Capitan) emitWithSeverity(ctx context.Context, signal Signal, severity 
 	}
 
 	// Create event from pool
-	event := newEvent(ctx, signal, severity, fields...)
+	event := newEvent(ctx, signal, severity, timestamp, fields...)
 
 	// Capture worker reference atomically to avoid TOCTOU race
 	c.mu.RLock()

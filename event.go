@@ -57,10 +57,10 @@ func (e *Event) Severity() Severity {
 
 // newEvent creates an Event with the given context, signal, severity and fields.
 // Events are pooled internally to reduce allocations.
-func newEvent(ctx context.Context, signal Signal, severity Severity, fields ...Field) *Event {
+func newEvent(ctx context.Context, signal Signal, severity Severity, timestamp time.Time, fields ...Field) *Event {
 	e := eventPool.Get().(*Event) //nolint:errcheck // Pool always returns *Event
 	e.signal = signal
-	e.timestamp = time.Now()
+	e.timestamp = timestamp
 	e.ctx = ctx
 	e.severity = severity
 
