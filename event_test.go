@@ -6,8 +6,20 @@ import (
 	"time"
 )
 
+func TestSignalNameAndDescription(t *testing.T) {
+	sig := NewSignal("test.signal", "Test signal description")
+
+	if sig.Name() != "test.signal" {
+		t.Errorf("expected name %q, got %q", "test.signal", sig.Name())
+	}
+
+	if sig.Description() != "Test signal description" {
+		t.Errorf("expected description %q, got %q", "Test signal description", sig.Description())
+	}
+}
+
 func TestEventGet(t *testing.T) {
-	sig := Signal("test.get")
+	sig := NewSignal("test.get", "Test get signal")
 	strKey := NewStringKey("name")
 	intKey := NewIntKey("count")
 
@@ -41,7 +53,7 @@ func TestEventGet(t *testing.T) {
 }
 
 func TestEventGetMissingKey(t *testing.T) {
-	sig := Signal("test.missing")
+	sig := NewSignal("test.missing", "Test missing key signal")
 	strKey := NewStringKey("existing")
 	missingKey := NewStringKey("missing")
 
@@ -54,7 +66,7 @@ func TestEventGetMissingKey(t *testing.T) {
 }
 
 func TestEventFields(t *testing.T) {
-	sig := Signal("test.fields")
+	sig := NewSignal("test.fields", "Test fields signal")
 	strKey := NewStringKey("name")
 	intKey := NewIntKey("count")
 	boolKey := NewBoolKey("active")
@@ -102,7 +114,7 @@ func TestEventFields(t *testing.T) {
 }
 
 func TestEventSignal(t *testing.T) {
-	sig := Signal("test.signal")
+	sig := NewSignal("test.signal", "Test signal")
 	key := NewStringKey("value")
 
 	event := newEvent(context.Background(), sig, SeverityInfo, time.Now(), key.Field("test"))
@@ -113,7 +125,7 @@ func TestEventSignal(t *testing.T) {
 }
 
 func TestEventTimestamp(t *testing.T) {
-	sig := Signal("test.timestamp")
+	sig := NewSignal("test.timestamp", "Test timestamp signal")
 	key := NewStringKey("value")
 
 	before := time.Now()
@@ -126,7 +138,7 @@ func TestEventTimestamp(t *testing.T) {
 }
 
 func TestEventPooling(t *testing.T) {
-	sig := Signal("test.pool")
+	sig := NewSignal("test.pool", "Test pooling signal")
 	key := NewStringKey("value")
 
 	// Create first event with "first" value
@@ -153,7 +165,7 @@ func TestEventPooling(t *testing.T) {
 }
 
 func TestEventFieldsDefensiveCopy(t *testing.T) {
-	sig := Signal("test.defensive")
+	sig := NewSignal("test.defensive", "Test defensive copy signal")
 	key := NewStringKey("value")
 
 	event := newEvent(context.Background(), sig, SeverityInfo, time.Now(), key.Field("test"))
@@ -168,7 +180,7 @@ func TestEventFieldsDefensiveCopy(t *testing.T) {
 }
 
 func TestEventContext(t *testing.T) {
-	sig := Signal("test.event.context")
+	sig := NewSignal("test.event.context", "Test event context signal")
 	key := NewStringKey("value")
 
 	type ctxKey string
@@ -190,7 +202,7 @@ func TestEventContext(t *testing.T) {
 }
 
 func TestEventContextBackground(t *testing.T) {
-	sig := Signal("test.background")
+	sig := NewSignal("test.background", "Test background context signal")
 	key := NewStringKey("value")
 
 	event := newEvent(context.Background(), sig, SeverityInfo, time.Now(), key.Field("test"))
@@ -206,7 +218,7 @@ func TestEventContextBackground(t *testing.T) {
 }
 
 func TestEventSeverity(t *testing.T) {
-	sig := Signal("test.severity")
+	sig := NewSignal("test.severity", "Test severity signal")
 	key := NewStringKey("value")
 
 	tests := []struct {
@@ -230,7 +242,7 @@ func TestEventSeverity(t *testing.T) {
 }
 
 func TestEventDefaultSeverity(t *testing.T) {
-	sig := Signal("test.default")
+	sig := NewSignal("test.default", "Test default severity signal")
 	key := NewStringKey("value")
 
 	// When using Emit(), severity should default to Info
@@ -249,7 +261,7 @@ func TestEventDefaultSeverity(t *testing.T) {
 }
 
 func TestSeverityMethods(t *testing.T) {
-	sig := Signal("test.severity.methods")
+	sig := NewSignal("test.severity.methods", "Test severity methods signal")
 	key := NewStringKey("value")
 
 	tests := []struct {

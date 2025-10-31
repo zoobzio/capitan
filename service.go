@@ -22,16 +22,20 @@ type Capitan struct {
 	bufferSize   int
 	panicHandler PanicHandler
 	syncMode     bool
+	emitCounts   map[Signal]uint64
+	fieldSchemas map[Signal][]Key
 }
 
 // New creates a new Capitan instance with optional configuration.
 // If no options are provided, sensible defaults are used (bufferSize=16, no panic handler).
 func New(opts ...Option) *Capitan {
 	c := &Capitan{
-		registry:   make(map[Signal][]*Listener),
-		workers:    make(map[Signal]*workerState),
-		shutdown:   make(chan struct{}),
-		bufferSize: 16, // default buffer size
+		registry:     make(map[Signal][]*Listener),
+		workers:      make(map[Signal]*workerState),
+		shutdown:     make(chan struct{}),
+		bufferSize:   16, // default buffer size
+		emitCounts:   make(map[Signal]uint64),
+		fieldSchemas: make(map[Signal][]Key),
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -139,7 +143,8 @@ func (c *Capitan) unregister(listener *Listener) {
 }
 
 // Stats returns runtime metrics for the Capitan instance.
-// Provides visibility into active workers, queue depths, and listener counts.
+// Provides visibility into active workers, queue depths, listener counts,
+// emit counts, and field schemas.
 func (c *Capitan) Stats() Stats {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -148,6 +153,8 @@ func (c *Capitan) Stats() Stats {
 		ActiveWorkers:  len(c.workers),
 		QueueDepths:    make(map[Signal]int, len(c.workers)),
 		ListenerCounts: make(map[Signal]int, len(c.registry)),
+		EmitCounts:     make(map[Signal]uint64, len(c.emitCounts)),
+		FieldSchemas:   make(map[Signal][]Key, len(c.fieldSchemas)),
 	}
 
 	for signal, worker := range c.workers {
@@ -156,6 +163,17 @@ func (c *Capitan) Stats() Stats {
 
 	for signal, listeners := range c.registry {
 		stats.ListenerCounts[signal] = len(listeners)
+	}
+
+	for signal, count := range c.emitCounts {
+		stats.EmitCounts[signal] = count
+	}
+
+	for signal, keys := range c.fieldSchemas {
+		// Defensive copy
+		keyCopy := make([]Key, len(keys))
+		copy(keyCopy, keys)
+		stats.FieldSchemas[signal] = keyCopy
 	}
 
 	return stats

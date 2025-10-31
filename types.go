@@ -9,7 +9,7 @@
 //
 // Quick example:
 //
-//	sig := capitan.Signal("order.created")
+//	sig := capitan.NewSignal("order.created", "New order has been created")
 //	orderID := capitan.NewStringKey("order_id")
 //
 //	capitan.Hook(sig, func(ctx context.Context, e *capitan.Event) {
@@ -24,7 +24,29 @@
 package capitan
 
 // Signal represents an event type identifier used for routing events to listeners.
-type Signal string
+type Signal struct {
+	name        string
+	description string
+}
+
+// NewSignal creates a new Signal with the given name and description.
+// The description is used as the human-readable message when converting to logs.
+func NewSignal(name, description string) Signal {
+	return Signal{
+		name:        name,
+		description: description,
+	}
+}
+
+// Name returns the signal's identifier.
+func (s Signal) Name() string {
+	return s.name
+}
+
+// Description returns the signal's human-readable description.
+func (s Signal) Description() string {
+	return s.description
+}
 
 // Severity represents the logging severity level of an event.
 type Severity string
@@ -115,4 +137,11 @@ type Stats struct {
 
 	// ListenerCounts maps each signal to the number of registered listeners.
 	ListenerCounts map[Signal]int
+
+	// EmitCounts maps each signal to the total number of times it has been emitted.
+	EmitCounts map[Signal]uint64
+
+	// FieldSchemas maps each signal to the keys of fields from its first emission.
+	// This provides a schema of what fields are available on each signal.
+	FieldSchemas map[Signal][]Key
 }

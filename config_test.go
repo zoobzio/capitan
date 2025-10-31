@@ -52,7 +52,7 @@ func TestWithPanicHandler(t *testing.T) {
 	c := New(WithPanicHandler(handler), WithSyncMode())
 	defer c.Shutdown()
 
-	sig := Signal("test.panic")
+	sig := NewSignal("test.panic", "Test panic signal")
 	key := NewStringKey("value")
 
 	c.Hook(sig, func(_ context.Context, _ *Event) {
@@ -75,7 +75,7 @@ func TestWithPanicHandlerNotSet(t *testing.T) {
 	c := New(WithSyncMode()) // No panic handler
 	defer c.Shutdown()
 
-	sig := Signal("test.panic.silent")
+	sig := NewSignal("test.panic.silent", "Test panic silent signal")
 	key := NewStringKey("value")
 	var called bool
 
@@ -101,8 +101,8 @@ func TestStats(t *testing.T) {
 	c := New()
 	defer c.Shutdown()
 
-	sig1 := Signal("test.stats.1")
-	sig2 := Signal("test.stats.2")
+	sig1 := NewSignal("test.stats.1", "Test stats signal 1")
+	sig2 := NewSignal("test.stats.2", "Test stats signal 2")
 	key := NewStringKey("value")
 
 	// Hook listeners
@@ -144,6 +144,25 @@ func TestStats(t *testing.T) {
 	if _, exists := stats.QueueDepths[sig2]; !exists {
 		t.Error("expected QueueDepths to contain sig2")
 	}
+
+	// Emit counts should track emissions
+	if stats.EmitCounts[sig1] != 1 {
+		t.Errorf("expected emit count 1 for sig1, got %d", stats.EmitCounts[sig1])
+	}
+	if stats.EmitCounts[sig2] != 1 {
+		t.Errorf("expected emit count 1 for sig2, got %d", stats.EmitCounts[sig2])
+	}
+
+	// Field schemas should be captured
+	if len(stats.FieldSchemas[sig1]) != 1 {
+		t.Errorf("expected 1 field in schema for sig1, got %d", len(stats.FieldSchemas[sig1]))
+	}
+	if len(stats.FieldSchemas[sig2]) != 1 {
+		t.Errorf("expected 1 field in schema for sig2, got %d", len(stats.FieldSchemas[sig2]))
+	}
+	if stats.FieldSchemas[sig1][0].Name() != "value" {
+		t.Errorf("expected field name 'value', got %q", stats.FieldSchemas[sig1][0].Name())
+	}
 }
 
 // TestMultipleOptions verifies multiple options can be combined.
@@ -168,7 +187,7 @@ func TestMultipleOptions(t *testing.T) {
 	}
 
 	// Verify handler works
-	sig := Signal("test.multi")
+	sig := NewSignal("test.multi", "Test multi signal")
 	key := NewStringKey("value")
 
 	c.Hook(sig, func(_ context.Context, _ *Event) {
@@ -192,7 +211,7 @@ func TestWithSyncMode(t *testing.T) {
 	}
 
 	// Verify events are processed synchronously (no timing needed)
-	sig := Signal("test.sync")
+	sig := NewSignal("test.sync", "Test sync signal")
 	key := NewStringKey("value")
 	var called bool
 

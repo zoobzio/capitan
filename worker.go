@@ -40,6 +40,19 @@ func (c *Capitan) emitWithSeverity(ctx context.Context, signal Signal, severity 
 	// Capture timestamp immediately to preserve chronological ordering
 	timestamp := time.Now()
 
+	// Track emit count and field schema
+	c.mu.Lock()
+	c.emitCounts[signal]++
+	// Capture field schema on first emit
+	if _, exists := c.fieldSchemas[signal]; !exists && len(fields) > 0 {
+		keys := make([]Key, len(fields))
+		for i, field := range fields {
+			keys[i] = field.Key()
+		}
+		c.fieldSchemas[signal] = keys
+	}
+	c.mu.Unlock()
+
 	// Sync mode: process event directly without workers
 	if c.syncMode {
 		c.mu.RLock()

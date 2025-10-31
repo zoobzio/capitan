@@ -11,7 +11,7 @@ func TestListenerClose(t *testing.T) {
 	c := New(WithSyncMode())
 	defer c.Shutdown()
 
-	sig := Signal("test.listener.close")
+	sig := NewSignal("test.listener.close", "Test listener close signal")
 	key := NewStringKey("value")
 
 	count := 0
@@ -37,7 +37,7 @@ func TestListenerCloseIdempotent(_ *testing.T) {
 	c := New(WithSyncMode())
 	defer c.Shutdown()
 
-	sig := Signal("test.listener.idempotent")
+	sig := NewSignal("test.listener.idempotent", "Test listener idempotent signal")
 
 	listener := c.Hook(sig, func(_ context.Context, _ *Event) {})
 
@@ -51,7 +51,7 @@ func TestListenerMultiplePerSignal(t *testing.T) {
 	c := New(WithSyncMode())
 	defer c.Shutdown()
 
-	sig := Signal("test.listener.multiple")
+	sig := NewSignal("test.listener.multiple", "Test listener multiple signal")
 	key := NewStringKey("value")
 
 	count := 0
@@ -79,8 +79,8 @@ func TestObserverClose(t *testing.T) {
 	c := New(WithSyncMode())
 	defer c.Shutdown()
 
-	sig1 := Signal("test.observer.close1")
-	sig2 := Signal("test.observer.close2")
+	sig1 := NewSignal("test.observer.close1", "Test observer close signal 1")
+	sig2 := NewSignal("test.observer.close2", "Test observer close signal 2")
 	key := NewStringKey("value")
 
 	// Create hooks so signals exist
@@ -112,7 +112,7 @@ func TestObserverCloseIdempotent(_ *testing.T) {
 	c := New(WithSyncMode())
 	defer c.Shutdown()
 
-	sig := Signal("test.observer.idempotent")
+	sig := NewSignal("test.observer.idempotent", "Test observer idempotent signal")
 
 	// Create hook so signal exists
 	c.Hook(sig, func(_ context.Context, _ *Event) {})
@@ -129,8 +129,8 @@ func TestObserverSnapshotBehavior(_ *testing.T) {
 	c := New()
 	defer c.Shutdown()
 
-	sig1 := Signal("test.observer.snapshot1")
-	sig2 := Signal("test.observer.snapshot2")
+	sig1 := NewSignal("test.observer.snapshot1", "Test observer snapshot signal 1")
+	sig2 := NewSignal("test.observer.snapshot2", "Test observer snapshot signal 2")
 	key := NewStringKey("value")
 
 	// Create first signal
@@ -173,9 +173,9 @@ func TestObserverReceivesAllExistingSignals(t *testing.T) {
 	c := New(WithSyncMode())
 	defer c.Shutdown()
 
-	sig1 := Signal("test.observer.all1")
-	sig2 := Signal("test.observer.all2")
-	sig3 := Signal("test.observer.all3")
+	sig1 := NewSignal("test.observer.all1", "Test observer all signal 1")
+	sig2 := NewSignal("test.observer.all2", "Test observer all signal 2")
+	sig3 := NewSignal("test.observer.all3", "Test observer all signal 3")
 	key := NewStringKey("value")
 
 	// Create all signals
@@ -205,7 +205,7 @@ func TestEmitAfterListenerCloseFullBuffer(t *testing.T) {
 	c := New(WithBufferSize(2))
 	defer c.Shutdown()
 
-	sig := Signal("test.fullbuffer")
+	sig := NewSignal("test.fullbuffer", "Test full buffer signal")
 	key := NewIntKey("value")
 
 	// Create listener that blocks processing
@@ -253,7 +253,7 @@ func TestConcurrentEmitAndListenerClose(t *testing.T) {
 
 	for i := 0; i < iterations; i++ {
 		c := New(WithBufferSize(1))
-		sig := Signal("test.race")
+		sig := NewSignal("test.race", "Test race signal")
 		key := NewIntKey("value")
 
 		// Slow listener to increase contention window
@@ -303,7 +303,7 @@ func TestEmitToClosedWorkerDropsEvent(t *testing.T) {
 	c := New(WithBufferSize(1))
 	defer c.Shutdown()
 
-	sig := Signal("test.drop")
+	sig := NewSignal("test.drop", "Test drop signal")
 	key := NewStringKey("value")
 
 	received := 0

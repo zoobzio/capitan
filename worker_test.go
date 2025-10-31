@@ -11,7 +11,7 @@ func TestWorkerCreatedLazily(t *testing.T) {
 	c := New()
 	defer c.Shutdown()
 
-	sig := Signal("test.worker.lazy")
+	sig := NewSignal("test.worker.lazy", "Test worker lazy signal")
 	key := NewStringKey("value")
 
 	// Before emit, no worker exists
@@ -48,7 +48,7 @@ func TestWorkerProcessesEventsAsync(t *testing.T) {
 	c := New()
 	defer c.Shutdown()
 
-	sig := Signal("test.worker.async")
+	sig := NewSignal("test.worker.async", "Test worker async signal")
 	key := NewIntKey("value")
 
 	const numEvents = 100
@@ -88,7 +88,7 @@ func TestWorkerInvokesAllListeners(t *testing.T) {
 	c := New()
 	defer c.Shutdown()
 
-	sig := Signal("test.worker.all")
+	sig := NewSignal("test.worker.all", "Test worker all signal")
 	key := NewStringKey("value")
 
 	count1, count2, count3 := 0, 0, 0
@@ -133,7 +133,7 @@ func TestWorkerPanicRecovery(t *testing.T) {
 	c := New()
 	defer c.Shutdown()
 
-	sig := Signal("test.worker.panic")
+	sig := NewSignal("test.worker.panic", "Test worker panic signal")
 	key := NewStringKey("value")
 
 	var wg sync.WaitGroup
@@ -168,7 +168,7 @@ func TestWorkerPanicRecovery(t *testing.T) {
 func TestWorkerShutdownDrainsQueue(t *testing.T) {
 	c := New()
 
-	sig := Signal("test.worker.drain")
+	sig := NewSignal("test.worker.drain", "Test worker drain signal")
 	key := NewStringKey("value")
 
 	processed := 0
@@ -205,7 +205,7 @@ func TestWorkerNoListeners(_ *testing.T) {
 	c := New()
 	defer c.Shutdown()
 
-	sig := Signal("test.worker.none")
+	sig := NewSignal("test.worker.none", "Test worker none signal")
 	key := NewStringKey("value")
 
 	// Should not panic or hang
@@ -218,7 +218,7 @@ func TestWorkerOnlyCreatedWithListeners(t *testing.T) {
 	c := New()
 	defer c.Shutdown()
 
-	sig := Signal("test.worker.creation")
+	sig := NewSignal("test.worker.creation", "Test worker creation signal")
 	key := NewStringKey("value")
 
 	// Emit without any listeners - worker should NOT be created
@@ -251,7 +251,7 @@ func TestWorkerNotCreatedOnHookOnly(t *testing.T) {
 	c := New()
 	defer c.Shutdown()
 
-	sig := Signal("test.hook.only")
+	sig := NewSignal("test.hook.only", "Test hook only signal")
 
 	// Just hook a listener without emitting
 	c.Hook(sig, func(_ context.Context, _ *Event) {})
@@ -269,7 +269,7 @@ func TestWorkerCreatedWithObserver(t *testing.T) {
 	c := New()
 	defer c.Shutdown()
 
-	sig := Signal("test.observer.worker")
+	sig := NewSignal("test.observer.worker", "Test observer worker signal")
 	key := NewStringKey("value")
 
 	// Create an observer
@@ -291,8 +291,8 @@ func TestWorkerMultipleSignalsIsolated(t *testing.T) {
 	c := New()
 	defer c.Shutdown()
 
-	sig1 := Signal("test.worker.iso1")
-	sig2 := Signal("test.worker.iso2")
+	sig1 := NewSignal("test.worker.iso1", "Test worker isolation signal 1")
+	sig2 := NewSignal("test.worker.iso2", "Test worker isolation signal 2")
 	key := NewStringKey("value")
 
 	count1, count2 := 0, 0
@@ -335,7 +335,7 @@ func TestWorkerContextCancellation(t *testing.T) {
 	c := New()
 	defer c.Shutdown()
 
-	sig := Signal("test.worker.cancel")
+	sig := NewSignal("test.worker.cancel", "Test worker cancel signal")
 	key := NewStringKey("value")
 
 	var received int
@@ -368,7 +368,7 @@ func TestWorkerContextTimeout(t *testing.T) {
 	c := New(WithBufferSize(1))
 	defer c.Shutdown()
 
-	sig := Signal("test.worker.timeout")
+	sig := NewSignal("test.worker.timeout", "Test worker timeout signal")
 	key := NewIntKey("value")
 
 	block := make(chan struct{})
@@ -405,7 +405,7 @@ func TestWorkerSkipsCancelledEvents(t *testing.T) {
 	c := New(WithBufferSize(10))
 	defer c.Shutdown()
 
-	sig := Signal("test.worker.skip")
+	sig := NewSignal("test.worker.skip", "Test worker skip signal")
 	key := NewStringKey("value")
 
 	var received int
@@ -454,7 +454,7 @@ func TestEmitBlockedOnShutdown(t *testing.T) {
 	// Test that Emit unblocks when Shutdown is called while waiting on full buffer
 	c := New(WithBufferSize(1))
 
-	sig := Signal("test.shutdown.blocked")
+	sig := NewSignal("test.shutdown.blocked", "Test shutdown blocked signal")
 	key := NewStringKey("value")
 
 	block := make(chan struct{})

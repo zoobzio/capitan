@@ -23,8 +23,8 @@ func TestObserverDynamic(t *testing.T) {
 	defer observer.Close()
 
 	// Now create signals and emit - observer should see them
-	sig1 := Signal("test.sig1")
-	sig2 := Signal("test.sig2")
+	sig1 := NewSignal("test.sig1", "Test signal 1")
+	sig2 := NewSignal("test.sig2", "Test signal 2")
 
 	c.Hook(sig1, func(_ context.Context, _ *Event) {}) // Create signal 1
 	c.Hook(sig2, func(_ context.Context, _ *Event) {}) // Create signal 2
@@ -58,7 +58,7 @@ func TestObserverDynamicWithEmit(t *testing.T) {
 	c := New(WithSyncMode())
 	defer c.Shutdown()
 
-	sig := Signal("test.emit")
+	sig := NewSignal("test.emit", "Test emit signal")
 	key := NewStringKey("value")
 
 	var received int
@@ -106,7 +106,7 @@ func TestConcurrentObserverAndHook(_ *testing.T) {
 		defer wg.Done()
 		deadline := time.Now().Add(duration)
 		for i := 0; time.Now().Before(deadline); i++ {
-			sig := Signal("test.concurrent." + string(rune(i)))
+			sig := NewSignal("test.concurrent."+string(rune(i)), "Test concurrent signal")
 			listener := c.Hook(sig, func(_ context.Context, _ *Event) {})
 			time.Sleep(time.Microsecond)
 			listener.Close()
@@ -120,7 +120,7 @@ func TestConcurrentObserverAndHook(_ *testing.T) {
 		key := NewIntKey("value")
 		deadline := time.Now().Add(duration)
 		for i := 0; time.Now().Before(deadline); i++ {
-			sig := Signal("test.concurrent." + string(rune(i%numSignals)))
+			sig := NewSignal("test.concurrent."+string(rune(i%numSignals)), "Test concurrent signal")
 			c.Emit(context.Background(), sig, key.Field(i))
 		}
 	}()
@@ -165,7 +165,7 @@ func TestObserverReceivesFutureSignals(t *testing.T) {
 
 	// Create 5 new signals after observer exists
 	for i := 0; i < 5; i++ {
-		sig := Signal("test.future." + string(rune('a'+i)))
+		sig := NewSignal("test.future."+string(rune('a'+i)), "Test future signal")
 		c.Hook(sig, func(_ context.Context, _ *Event) {})
 		c.Emit(context.Background(), sig, key.Field("test"))
 	}
@@ -181,7 +181,7 @@ func TestObserverDoesNotReceiveAfterClose(t *testing.T) {
 	c := New(WithSyncMode())
 	defer c.Shutdown()
 
-	sig := Signal("test.close")
+	sig := NewSignal("test.close", "Test close signal")
 	key := NewStringKey("value")
 
 	var count int
@@ -198,7 +198,7 @@ func TestObserverDoesNotReceiveAfterClose(t *testing.T) {
 	observer.Close()
 
 	// Emit second event - should NOT be received
-	sig2 := Signal("test.close2")
+	sig2 := NewSignal("test.close2", "Test close signal 2")
 	c.Hook(sig2, func(_ context.Context, _ *Event) {})
 	c.Emit(context.Background(), sig2, key.Field("second"))
 
@@ -211,9 +211,9 @@ func TestObserverWithWhitelist(t *testing.T) {
 	c := New(WithSyncMode())
 	defer c.Shutdown()
 
-	sig1 := Signal("test.whitelist.one")
-	sig2 := Signal("test.whitelist.two")
-	sig3 := Signal("test.whitelist.three")
+	sig1 := NewSignal("test.whitelist.one", "Test whitelist signal 1")
+	sig2 := NewSignal("test.whitelist.two", "Test whitelist signal 2")
+	sig3 := NewSignal("test.whitelist.three", "Test whitelist signal 3")
 	key := NewStringKey("value")
 
 	// Hook all three signals
@@ -267,9 +267,9 @@ func TestObserverWhitelistFutureSignals(t *testing.T) {
 	c := New(WithSyncMode())
 	defer c.Shutdown()
 
-	sig1 := Signal("test.future.one")
-	sig2 := Signal("test.future.two")
-	sig3 := Signal("test.future.three")
+	sig1 := NewSignal("test.future.one", "Test future signal 1")
+	sig2 := NewSignal("test.future.two", "Test future signal 2")
+	sig3 := NewSignal("test.future.three", "Test future signal 3")
 	key := NewStringKey("value")
 
 	var received []Signal
@@ -322,8 +322,8 @@ func TestObserverNoWhitelistReceivesAll(t *testing.T) {
 	c := New(WithSyncMode())
 	defer c.Shutdown()
 
-	sig1 := Signal("test.all.one")
-	sig2 := Signal("test.all.two")
+	sig1 := NewSignal("test.all.one", "Test all signal 1")
+	sig2 := NewSignal("test.all.two", "Test all signal 2")
 	key := NewStringKey("value")
 
 	c.Hook(sig1, func(_ context.Context, _ *Event) {})
@@ -350,7 +350,7 @@ func TestObserverContextPropagation(t *testing.T) {
 	c := New(WithSyncMode())
 	defer c.Shutdown()
 
-	sig := Signal("test.observer.ctx")
+	sig := NewSignal("test.observer.ctx", "Test observer context signal")
 	key := NewStringKey("value")
 
 	type ctxKey string

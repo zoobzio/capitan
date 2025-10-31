@@ -27,7 +27,7 @@ func TestEmitCreatesWorkerLazily(t *testing.T) {
 	c := New()
 	defer c.Shutdown()
 
-	sig := Signal("test.lazy")
+	sig := NewSignal("test.lazy", "Test lazy signal")
 	key := NewStringKey("value")
 
 	// Before emit, no worker exists
@@ -66,7 +66,7 @@ func TestEmitAsyncProcessing(t *testing.T) {
 	c := New(WithSyncMode())
 	defer c.Shutdown()
 
-	sig := Signal("test.async")
+	sig := NewSignal("test.async", "Test async signal")
 	key := NewIntKey("value")
 
 	const numEmissions = 100
@@ -91,7 +91,7 @@ func TestEmitWithMultipleListeners(t *testing.T) {
 	c := New(WithSyncMode())
 	defer c.Shutdown()
 
-	sig := Signal("test.multi")
+	sig := NewSignal("test.multi", "Test multi signal")
 	key := NewStringKey("value")
 
 	var received1, received2 string
@@ -120,7 +120,7 @@ func TestEmitWithNoListeners(_ *testing.T) {
 	c := New(WithSyncMode())
 	defer c.Shutdown()
 
-	sig := Signal("test.nolisteners")
+	sig := NewSignal("test.nolisteners", "Test no listeners signal")
 	key := NewStringKey("value")
 
 	// Should not panic or block
@@ -131,7 +131,7 @@ func TestEmitWithPanicRecovery(t *testing.T) {
 	c := New(WithSyncMode())
 	defer c.Shutdown()
 
-	sig := Signal("test.panic")
+	sig := NewSignal("test.panic", "Test panic signal")
 	key := NewStringKey("value")
 
 	var executed bool
@@ -157,7 +157,7 @@ func TestHook(t *testing.T) {
 	c := New(WithSyncMode())
 	defer c.Shutdown()
 
-	sig := Signal("test.hook")
+	sig := NewSignal("test.hook", "Test hook signal")
 	key := NewStringKey("value")
 
 	var received *Event
@@ -181,8 +181,8 @@ func TestObserve(t *testing.T) {
 	c := New(WithSyncMode())
 	defer c.Shutdown()
 
-	sig1 := Signal("test.sig1")
-	sig2 := Signal("test.sig2")
+	sig1 := NewSignal("test.sig1", "Test signal 1")
+	sig2 := NewSignal("test.sig2", "Test signal 2")
 	key := NewStringKey("msg")
 
 	// Create hooks first so signals exist in registry
@@ -225,7 +225,7 @@ func TestObserve(t *testing.T) {
 func TestShutdown(_ *testing.T) {
 	c := New()
 
-	sig := Signal("test.shutdown")
+	sig := NewSignal("test.shutdown", "Test shutdown signal")
 	key := NewStringKey("value")
 
 	var wg sync.WaitGroup
@@ -247,7 +247,7 @@ func TestShutdown(_ *testing.T) {
 }
 
 func TestModuleLevelAPI(t *testing.T) {
-	sig := Signal("test.module")
+	sig := NewSignal("test.module", "Test module signal")
 	key := NewStringKey("value")
 
 	var received *Event
@@ -279,7 +279,7 @@ func TestListenerReceivesContext(t *testing.T) {
 	c := New(WithSyncMode())
 	defer c.Shutdown()
 
-	sig := Signal("test.ctx.value")
+	sig := NewSignal("test.ctx.value", "Test context value signal")
 	key := NewStringKey("value")
 
 	type ctxKey string
@@ -304,8 +304,8 @@ func TestContextIsolationPerSignal(t *testing.T) {
 	c := New(WithSyncMode())
 	defer c.Shutdown()
 
-	sig1 := Signal("test.iso.one")
-	sig2 := Signal("test.iso.two")
+	sig1 := NewSignal("test.iso.one", "Test isolation signal 1")
+	sig2 := NewSignal("test.iso.two", "Test isolation signal 2")
 	key := NewStringKey("value")
 
 	type ctxKey string
@@ -349,7 +349,7 @@ func TestModuleLevelConfigure(t *testing.T) {
 	)
 
 	// Verify the default instance still works after Configure
-	sig := Signal("test.configure")
+	sig := NewSignal("test.configure", "Test configure signal")
 	key := NewStringKey("value")
 
 	var received bool
@@ -371,8 +371,8 @@ func TestModuleLevelConfigure(t *testing.T) {
 }
 
 func TestModuleLevelObserve(t *testing.T) {
-	sig1 := Signal("test.observe.1")
-	sig2 := Signal("test.observe.2")
+	sig1 := NewSignal("test.observe.1", "Test observe signal 1")
+	sig2 := NewSignal("test.observe.2", "Test observe signal 2")
 	key := NewStringKey("msg")
 
 	Hook(sig1, func(_ context.Context, _ *Event) {})
@@ -405,7 +405,7 @@ func TestModuleLevelObserve(t *testing.T) {
 }
 
 func TestModuleLevelSeverityMethods(t *testing.T) {
-	sig := Signal("test.module.severity")
+	sig := NewSignal("test.module.severity", "Test module severity signal")
 	key := NewStringKey("value")
 
 	tests := []struct {
@@ -442,7 +442,7 @@ func TestModuleLevelSeverityMethods(t *testing.T) {
 }
 
 func TestModuleLevelShutdown(t *testing.T) {
-	sig := Signal("test.shutdown.module")
+	sig := NewSignal("test.shutdown.module", "Test shutdown module signal")
 	key := NewStringKey("value")
 
 	var processed bool

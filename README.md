@@ -46,7 +46,7 @@ import (
 
 func main() {
     // Define signal and keys
-    orderCreated := capitan.Signal("order.created")
+    orderCreated := capitan.NewSignal("order.created", "New order has been created")
     orderID := capitan.NewStringKey("order_id")
     total := capitan.NewFloat64Key("total")
 
@@ -92,8 +92,8 @@ Requirements: Go 1.24+
 
 **Signals** identify event types:
 ```go
-userLogin := capitan.Signal("user.login")
-orderShipped := capitan.Signal("order.shipped")
+userLogin := capitan.NewSignal("user.login", "User successfully logged in")
+orderShipped := capitan.NewSignal("order.shipped", "Order has been shipped to customer")
 ```
 
 **Keys** define typed field names:
@@ -141,10 +141,10 @@ Observers receive events from both existing signals and any signals created afte
 
 ```go
 // Define signals at package level
-const (
-    UserLogin    = capitan.Signal("user.login")
-    UserLogout   = capitan.Signal("user.logout")
-    OrderCreated = capitan.Signal("order.created")
+var (
+    UserLogin    = capitan.NewSignal("user.login", "User successfully logged in")
+    UserLogout   = capitan.NewSignal("user.logout", "User logged out of session")
+    OrderCreated = capitan.NewSignal("order.created", "New order has been created")
 )
 
 // Define keys at package level
@@ -168,7 +168,7 @@ var (
 **Avoid dynamic signals:**
 ```go
 // BAD: Creates new signal per user
-signal := capitan.Signal(fmt.Sprintf("user.%s.login", userID))
+signal := capitan.NewSignal(fmt.Sprintf("user.%s.login", userID), "User login")
 
 // GOOD: Use fields to carry dynamic data
 capitan.Emit(context.Background(), UserLogin, userID.Field(id))
@@ -192,9 +192,9 @@ import (
 )
 
 // Define signals as constants
-const (
-    orderCreated = capitan.Signal("order.created")
-    orderShipped = capitan.Signal("order.shipped")
+var (
+    orderCreated = capitan.NewSignal("order.created", "New order has been created")
+    orderShipped = capitan.NewSignal("order.shipped", "Order has been shipped to customer")
 )
 
 // Define keys
@@ -407,7 +407,7 @@ var orderKey = capitan.NewKey[OrderInfo]("order", "myapp.OrderInfo")
 
 // Use it exactly like built-in types
 func main() {
-    sig := capitan.Signal("order.processed")
+    sig := capitan.NewSignal("order.processed", "Order has been processed successfully")
 
     capitan.Hook(sig, func(ctx context.Context, e *capitan.Event) {
         order, ok := orderKey.From(e)  // Type-safe extraction

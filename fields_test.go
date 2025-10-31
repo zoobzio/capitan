@@ -162,7 +162,7 @@ func TestAllFieldTypes(t *testing.T) {
 	c := New()
 	defer c.Shutdown()
 
-	sig := Signal("test.alltypes")
+	sig := NewSignal("test.alltypes", "Test all types signal")
 
 	strKey := NewStringKey("str")
 	intKey := NewIntKey("int")
@@ -211,7 +211,7 @@ func TestFromMethods(t *testing.T) {
 	c := New()
 	defer c.Shutdown()
 
-	sig := Signal("test.from")
+	sig := NewSignal("test.from", "Test from signal")
 
 	strKey := NewStringKey("str")
 	intKey := NewIntKey("int")
@@ -315,7 +315,7 @@ func TestCustomStructField(t *testing.T) {
 	c := New()
 	defer c.Shutdown()
 
-	sig := Signal("test.custom")
+	sig := NewSignal("test.custom", "Test custom signal")
 	orderKey := NewOrderInfoKey("order")
 
 	expectedOrder := OrderInfo{
@@ -419,7 +419,7 @@ func TestNewKeyGeneric(t *testing.T) {
 	c := New()
 	defer c.Shutdown()
 
-	sig := Signal("test.newkey")
+	sig := NewSignal("test.newkey", "Test new key signal")
 	expectedData := CustomData{Value: "test", Count: 42}
 
 	var received CustomData
@@ -452,7 +452,7 @@ func TestFromTypeMismatch(t *testing.T) {
 	c := New()
 	defer c.Shutdown()
 
-	sig := Signal("test.mismatch")
+	sig := NewSignal("test.mismatch", "Test mismatch signal")
 	strKey := NewStringKey("data")
 	intKey := NewIntKey("data") // Same name, different type
 
